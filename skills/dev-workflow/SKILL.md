@@ -40,7 +40,7 @@ npx skills add vercel-labs/skills --skill find-skills -a claude-code
 
 | Source | MCP Server |
 |--------|-----------|
-| ONES | `@ai-dev/requirements` (bundled) |
+| ONES | `ai-dev-requirements` (bundled) |
 | GitHub | [github/github-mcp-server](https://github.com/github/github-mcp-server) |
 | Jira | [Atlassian Rovo MCP](https://www.atlassian.com/blog/announcements/remote-mcp-server) |
 | Figma | [Figma MCP Server](https://developers.figma.com/docs/figma-mcp-server/) |

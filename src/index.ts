@@ -69,7 +69,7 @@ async function main() {
 
   // Create MCP server
   const server = new McpServer({
-    name: '@ai-dev/requirements',
+    name: 'ai-dev-requirements',
     version: '0.1.0',
   })
 
