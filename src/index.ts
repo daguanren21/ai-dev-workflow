@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { loadConfig } from './config/loader.js'
+import { loadConfig, type LoadConfigResult } from './config/loader.js'
 import { createAdapter, type BaseAdapter } from './adapters/index.js'
 import { GetRequirementSchema, handleGetRequirement } from './tools/get-requirement.js'
 import { SearchRequirementsSchema, handleSearchRequirements } from './tools/search-requirements.js'
@@ -46,7 +46,7 @@ async function main() {
   loadEnvFile()
 
   // Load config
-  let config: ReturnType<typeof loadConfig>
+  let config: LoadConfigResult
   try {
     config = loadConfig()
   } catch (err) {
@@ -63,7 +63,7 @@ async function main() {
 
   // Create MCP server
   const server = new McpServer({
-    name: 'requirements-mcp-server',
+    name: '@ai-dev/requirements',
     version: '0.1.0',
   })
 

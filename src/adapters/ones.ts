@@ -98,10 +98,10 @@ const TASK_DETAIL_QUERY = `
 `
 
 const SEARCH_TASKS_QUERY = `
-  query GROUP_TASK_DATA($groupBy: GroupBy, $groupOrderBy: OrderBy, $orderBy: OrderBy, $filterGroup: [Filter!], $search: Search, $pagination: Pagination) {
+  query GROUP_TASK_DATA($groupBy: GroupBy, $groupOrderBy: OrderBy, $orderBy: OrderBy, $filterGroup: [Filter!], $search: Search, $pagination: Pagination, $limit: Int) {
     buckets(groupBy: $groupBy, orderBy: $groupOrderBy, pagination: $pagination, filter: $search) {
       key
-      tasks(filterGroup: $filterGroup, orderBy: $orderBy, limit: 1000, includeAncestors: { pathField: "path" }) {
+      tasks(filterGroup: $filterGroup, orderBy: $orderBy, limit: $limit, includeAncestors: { pathField: "path" }) {
         key uuid number name
         issueType { uuid name }
         status { uuid name category }
@@ -114,21 +114,7 @@ const SEARCH_TASKS_QUERY = `
 `
 
 // Query to find a task by its number
-const TASK_BY_NUMBER_QUERY = `
-  query GROUP_TASK_DATA($groupBy: GroupBy, $groupOrderBy: OrderBy, $orderBy: OrderBy, $filterGroup: [Filter!], $search: Search, $pagination: Pagination) {
-    buckets(groupBy: $groupBy, orderBy: $groupOrderBy, pagination: $pagination, filter: $search) {
-      key
-      tasks(filterGroup: $filterGroup, orderBy: $orderBy, limit: 10) {
-        key uuid number name
-        issueType { uuid name }
-        status { uuid name category }
-        priority { value }
-        assign { uuid name }
-        project { uuid name }
-      }
-    }
-  }
-`
+const TASK_BY_NUMBER_QUERY = SEARCH_TASKS_QUERY
 const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
 
 // ============ Helpers ============
@@ -158,8 +144,9 @@ function toRequirement(task: OnesTaskNode, description = ''): Requirement {
     labels: [],
     reporter: '',
     assignee: task.assign?.name ?? null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    // ONES GraphQL does not return timestamps; these are fetch-time placeholders
+    createdAt: '',
+    updatedAt: '',
     dueDate: null,
     attachments: [],
     raw: task as unknown as Record<string, unknown>,
@@ -288,7 +275,7 @@ export class OnesAdapter extends BaseAdapter {
         org_user_uuid: orgUser.org_user.org_user_uuid,
       }),
     })
-    if (!finalizeRes.ok && finalizeRes.status !== 200) {
+    if (!finalizeRes.ok) {
       const text = await finalizeRes.text().catch(() => '')
       throw new Error(`ONES: Finalize failed: ${finalizeRes.status} ${text}`)
     }
@@ -462,6 +449,7 @@ export class OnesAdapter extends BaseAdapter {
           filterGroup: [{ number_in: [taskNumber] }],
           search: null,
           pagination: { limit: 10, preciseCount: false },
+          limit: 10,
         },
         'group-task-data',
       )
@@ -586,6 +574,7 @@ export class OnesAdapter extends BaseAdapter {
         ],
         search: null,
         pagination: { limit: pageSize * page, preciseCount: false },
+        limit: 1000,
       },
       'group-task-data',
     )
