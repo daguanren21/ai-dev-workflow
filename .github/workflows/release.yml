@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
 permissions:
   contents: write
   id-token: write # to use OpenID Connect token for provenance (changesets/action)
