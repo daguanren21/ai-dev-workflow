@@ -1,5 +1,5 @@
-import { z } from 'zod/v4'
 import type { BaseAdapter } from '../adapters/base.js'
+import { z } from 'zod/v4'
 
 export const SearchRequirementsSchema = z.object({
   query: z.string().describe('Search keywords'),

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { handleGetRequirement } from '../../src/tools/get-requirement.js'
 import type { BaseAdapter } from '../../src/adapters/base.js'
 import type { Requirement } from '../../src/types/requirement.js'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { handleGetRequirement } from '../../src/tools/get-requirement.js'
 
 const mockRequirement: Requirement = {
   id: 'TEST-001',

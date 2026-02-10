@@ -58,7 +58,7 @@ export async function authFetch<T = unknown>(
   const authHeaders = buildAuthHeaders(sourceConfig.auth, resolvedAuth)
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Accept: 'application/json',
+    'Accept': 'application/json',
     ...authHeaders,
     ...sourceConfig.headers,
     ...extraHeaders,

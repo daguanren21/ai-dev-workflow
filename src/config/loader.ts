@@ -1,9 +1,9 @@
-import { z } from 'zod/v4'
-import { readFileSync, existsSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
-import type { McpConfig, SourceConfig } from '../types/config.js'
 import type { AuthConfig } from '../types/auth.js'
+import type { McpConfig, SourceConfig } from '../types/config.js'
 import type { SourceType } from '../types/requirement.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { z } from 'zod/v4'
 
 const AuthSchema = z.discriminatedUnion('type', [
   z.object({
@@ -67,7 +67,8 @@ function findConfigFile(startDir: string): string | null {
       return candidate
     }
     const parent = dirname(dir)
-    if (parent === dir) break
+    if (parent === dir)
+      break
     dir = parent
   }
   return null
@@ -81,7 +82,8 @@ function resolveAuthEnv(auth: AuthConfig): Record<string, string> {
   const resolved: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(auth)) {
-    if (key === 'type') continue
+    if (key === 'type')
+      continue
     if (key.endsWith('Env') && typeof value === 'string') {
       const envValue = process.env[value]
       if (!envValue) {
@@ -90,7 +92,8 @@ function resolveAuthEnv(auth: AuthConfig): Record<string, string> {
       // Strip the "Env" suffix for the resolved key
       const resolvedKey = key.slice(0, -3)
       resolved[resolvedKey] = envValue
-    } else if (typeof value === 'string') {
+    }
+    else if (typeof value === 'string') {
       resolved[key] = value
     }
   }
@@ -120,9 +123,9 @@ export function loadConfig(startDir?: string): LoadConfigResult {
 
   if (!configPath) {
     throw new Error(
-      `Config file "${CONFIG_FILENAME}" not found. ` +
-      `Searched from "${dir}" to root. ` +
-      `Create one based on .requirements-mcp.json.example`,
+      `Config file "${CONFIG_FILENAME}" not found. `
+      + `Searched from "${dir}" to root. `
+      + `Create one based on .requirements-mcp.json.example`,
     )
   }
 
@@ -130,7 +133,8 @@ export function loadConfig(startDir?: string): LoadConfigResult {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
-  } catch {
+  }
+  catch {
     throw new Error(`Invalid JSON in ${configPath}`)
   }
 

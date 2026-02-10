@@ -5,13 +5,13 @@
  * 使组件层完全不需要关心后端字段差异。
  */
 import type {
-  PageParams,
-  PageResponse,
-  OrderInfo,
   BackendOrderInfo,
   OrderForm,
+  OrderInfo,
+  PageParams,
+  PageResponse,
 } from './types.js'
-import { transformOrder, toBackendParams } from './types.js'
+import { toBackendParams, transformOrder } from './types.js'
 
 // ============================================================
 // 模拟 request 函数（实际项目中由 axios/fetch 封装提供）

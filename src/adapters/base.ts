@@ -1,5 +1,5 @@
-import type { Requirement, SearchResult, SourceType } from '../types/requirement.js'
 import type { SourceConfig } from '../types/config.js'
+import type { Requirement, SearchResult, SourceType } from '../types/requirement.js'
 
 export interface GetRequirementParams {
   id: string

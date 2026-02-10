@@ -1,6 +1,7 @@
 {
   "name": "@ai-dev/requirements",
   "version": "0.1.0",
+  "packageManager": "pnpm@10.28.1",
   "description": "MCP server for fetching requirements from ONES, bundled with a parallel task framework for AI-assisted development",
   "type": "module",
   "main": "./dist/index.mjs",
@@ -20,8 +21,11 @@
     "inspect": "npx @modelcontextprotocol/inspector node --env-file=.env ./dist/index.mjs",
     "test": "vitest",
     "test:run": "vitest run",
-    "lint": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
     "release": "bumpp",
+    "prepare": "simple-git-hooks",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [
@@ -40,10 +44,20 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "bumpp": "^10.1.0",
+    "@antfu/eslint-config": "^7.4.2",
     "@types/node": "^25.2.2",
+    "bumpp": "^10.1.0",
+    "eslint": "^10.0.0",
+    "lint-staged": "^16.2.7",
+    "simple-git-hooks": "^2.13.1",
     "tsdown": "^0.20.3",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": "eslint --fix"
   }
 }

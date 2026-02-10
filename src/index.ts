@@ -1,12 +1,14 @@
-import { readFileSync, existsSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import type { BaseAdapter } from './adapters/index.js'
+import type { LoadConfigResult } from './config/loader.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { loadConfig, type LoadConfigResult } from './config/loader.js'
-import { createAdapter, type BaseAdapter } from './adapters/index.js'
+import { createAdapter } from './adapters/index.js'
+import { loadConfig } from './config/loader.js'
 import { GetRequirementSchema, handleGetRequirement } from './tools/get-requirement.js'
-import { SearchRequirementsSchema, handleSearchRequirements } from './tools/search-requirements.js'
 import { handleListSources } from './tools/list-sources.js'
+import { handleSearchRequirements, SearchRequirementsSchema } from './tools/search-requirements.js'
 
 /**
  * Load .env file into process.env (if it exists).
@@ -20,13 +22,15 @@ function loadEnvFile() {
       const content = readFileSync(envPath, 'utf-8')
       for (const line of content.split('\n')) {
         const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#')) continue
+        if (!trimmed || trimmed.startsWith('#'))
+          continue
         const eqIndex = trimmed.indexOf('=')
-        if (eqIndex === -1) continue
+        if (eqIndex === -1)
+          continue
         const key = trimmed.slice(0, eqIndex).trim()
         let value = trimmed.slice(eqIndex + 1).trim()
         // Strip surrounding quotes
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
           value = value.slice(1, -1)
         }
         if (!process.env[key]) {
@@ -36,7 +40,8 @@ function loadEnvFile() {
       return
     }
     const parent = dirname(dir)
-    if (parent === dir) break
+    if (parent === dir)
+      break
     dir = parent
   }
 }
@@ -49,7 +54,8 @@ async function main() {
   let config: LoadConfigResult
   try {
     config = loadConfig()
-  } catch (err) {
+  }
+  catch (err) {
     console.error(`[requirements-mcp] ${(err as Error).message}`)
     process.exit(1)
   }
@@ -75,7 +81,8 @@ async function main() {
     async (params) => {
       try {
         return await handleGetRequirement(params, adapters, config.config.defaultSource)
-      } catch (err) {
+      }
+      catch (err) {
         return {
           content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
           isError: true,
@@ -91,7 +98,8 @@ async function main() {
     async (params) => {
       try {
         return await handleSearchRequirements(params, adapters, config.config.defaultSource)
-      } catch (err) {
+      }
+      catch (err) {
         return {
           content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
           isError: true,
@@ -107,7 +115,8 @@ async function main() {
     async () => {
       try {
         return await handleListSources(adapters, config.config)
-      } catch (err) {
+      }
+      catch (err) {
         return {
           content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
           isError: true,

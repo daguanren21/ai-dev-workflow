@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { handleSearchRequirements } from '../../src/tools/search-requirements.js'
 import type { BaseAdapter } from '../../src/adapters/base.js'
 import type { SearchResult } from '../../src/types/requirement.js'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { handleSearchRequirements } from '../../src/tools/search-requirements.js'
 
 const mockSearchResult: SearchResult = {
   items: [

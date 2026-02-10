@@ -1,5 +1,5 @@
-import { z } from 'zod/v4'
 import type { BaseAdapter } from '../adapters/base.js'
+import { z } from 'zod/v4'
 
 export const GetRequirementSchema = z.object({
   id: z.string().describe('The requirement/issue ID'),

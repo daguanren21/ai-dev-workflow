@@ -1,9 +1,10 @@
-import crypto from 'node:crypto'
-import type { Requirement, SearchResult } from '../types/requirement.js'
 import type { SourceConfig } from '../types/config.js'
-import type { SourceType } from '../types/requirement.js'
-import { BaseAdapter, type GetRequirementParams, type SearchRequirementsParams } from './base.js'
-import { mapOnesStatus, mapOnesPriority, mapOnesType } from '../utils/map-status.js'
+import type { Requirement, SearchResult, SourceType } from '../types/requirement.js'
+
+import type { GetRequirementParams, SearchRequirementsParams } from './base.js'
+import crypto from 'node:crypto'
+import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
+import { BaseAdapter } from './base.js'
 
 // ============ ONES GraphQL types ============
 
@@ -12,13 +13,13 @@ interface OnesTaskNode {
   uuid: string
   number: number
   name: string
-  status: { uuid: string; name: string; category?: string }
+  status: { uuid: string, name: string, category?: string }
   priority?: { value: string }
-  issueType?: { uuid: string; name: string }
-  assign?: { uuid: string; name: string } | null
-  owner?: { uuid: string; name: string } | null
-  project?: { uuid: string; name: string }
-  parent?: { uuid: string; number?: number; issueType?: { uuid: string; name: string } } | null
+  issueType?: { uuid: string, name: string }
+  assign?: { uuid: string, name: string } | null
+  owner?: { uuid: string, name: string } | null
+  project?: { uuid: string, name: string }
+  parent?: { uuid: string, number?: number, issueType?: { uuid: string, name: string } } | null
   relatedTasks?: OnesRelatedTask[]
   relatedWikiPages?: OnesWikiPage[]
   relatedWikiPagesCount?: number
@@ -37,9 +38,9 @@ interface OnesRelatedTask {
   uuid: string
   number: number
   name: string
-  issueType: { uuid: string; name: string }
-  status: { uuid: string; name: string; category?: string }
-  assign?: { uuid: string; name: string } | null
+  issueType: { uuid: string, name: string }
+  status: { uuid: string, name: string, category?: string }
+  assign?: { uuid: string, name: string } | null
 }
 
 interface OnesTokenResponse {
@@ -54,8 +55,8 @@ interface OnesLoginResponse {
   org_users: Array<{
     region_uuid: string
     org_uuid: string
-    org_user: { org_user_uuid: string; name: string }
-    org: { org_uuid: string; name: string }
+    org_user: { org_user_uuid: string, name: string }
+    org: { org_uuid: string, name: string }
   }>
 }
 
@@ -222,7 +223,8 @@ export class OnesAdapter extends BaseAdapter {
     let orgUser = loginData.org_users[0]
     if (orgUuid) {
       const match = loginData.org_users.find(u => u.org_uuid === orgUuid)
-      if (match) orgUser = match
+      if (match)
+        orgUser = match
     }
 
     // 4. PKCE: generate code verifier + challenge
@@ -246,7 +248,7 @@ export class OnesAdapter extends BaseAdapter {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: cookies,
+        'Cookie': cookies,
       },
       body: authorizeParams.toString(),
       redirect: 'manual',
@@ -266,7 +268,7 @@ export class OnesAdapter extends BaseAdapter {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json;charset=UTF-8',
-        Cookie: cookies,
+        'Cookie': cookies,
       },
       body: JSON.stringify({
         auth_request_id: authRequestId,
@@ -304,7 +306,7 @@ export class OnesAdapter extends BaseAdapter {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Cookie: cookies,
+        'Cookie': cookies,
       },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
@@ -327,7 +329,7 @@ export class OnesAdapter extends BaseAdapter {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token.access_token}`,
+          'Authorization': `Bearer ${token.access_token}`,
           'Content-Type': 'application/json;charset=UTF-8',
         },
         body: JSON.stringify({ org_my_team: 0 }),
@@ -338,7 +340,7 @@ export class OnesAdapter extends BaseAdapter {
     }
 
     const teamsData = (await teamsRes.json()) as {
-      org_my_team?: { teams?: Array<{ uuid: string; name: string }> }
+      org_my_team?: { teams?: Array<{ uuid: string, name: string }> }
     }
     const teams = teamsData.org_my_team?.teams ?? []
 
@@ -347,7 +349,8 @@ export class OnesAdapter extends BaseAdapter {
     let teamUuid = teams[0]?.uuid
     if (configTeamUuid) {
       const match = teams.find(t => t.uuid === configTeamUuid)
-      if (match) teamUuid = match.uuid
+      if (match)
+        teamUuid = match.uuid
     }
 
     if (!teamUuid) {
@@ -374,7 +377,7 @@ export class OnesAdapter extends BaseAdapter {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.accessToken}`,
+        'Authorization': `Bearer ${session.accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query, variables }),
@@ -437,7 +440,7 @@ export class OnesAdapter extends BaseAdapter {
     // If the ID looks like a number (with or without #), search to find the UUID
     const numMatch = taskUuid.match(/^#?(\d+)$/)
     if (numMatch) {
-      const taskNumber = parseInt(numMatch[1], 10)
+      const taskNumber = Number.parseInt(numMatch[1], 10)
       const searchData = await this.graphql<{
         data?: { buckets?: Array<{ tasks?: OnesTaskNode[] }> }
       }>(
@@ -534,7 +537,8 @@ export class OnesAdapter extends BaseAdapter {
         parts.push('')
         if (wiki.content) {
           parts.push(wiki.content)
-        } else {
+        }
+        else {
           parts.push('(No content available)')
         }
       }
@@ -588,8 +592,9 @@ export class OnesAdapter extends BaseAdapter {
       const numMatch = keyword.match(/^#?(\d+)$/)
 
       if (numMatch) {
-        tasks = tasks.filter(t => t.number === parseInt(numMatch[1], 10))
-      } else {
+        tasks = tasks.filter(t => t.number === Number.parseInt(numMatch[1], 10))
+      }
+      else {
         tasks = tasks.filter(t => t.name.toLowerCase().includes(lower))
       }
     }
