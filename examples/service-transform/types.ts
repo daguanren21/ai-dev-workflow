@@ -43,9 +43,9 @@ export interface OrderInfo {
   orderId: string
   carrier: string
   trackingNo: string
-  amount: number       // 单位：元
-  status: string       // 'Pending' | 'Shipped' | 'Canceled'
-  createdAt: string    // ISO 8601
+  amount: number // 单位：元
+  status: string // 'Pending' | 'Shipped' | 'Canceled'
+  createdAt: string // ISO 8601
 }
 
 /**
@@ -59,10 +59,10 @@ export interface OrderInfo {
  */
 export interface BackendOrderInfo {
   order_id: string
-  carrier_info: { code: string; name: string }
+  carrier_info: { code: string, name: string }
   tracking_number: string
-  amount: string       // 分为单位的字符串
-  status: number       // 1=Pending, 2=Shipped, 3=Canceled
+  amount: string // 分为单位的字符串
+  status: number // 1=Pending, 2=Shipped, 3=Canceled
   created_at: string
 }
 
@@ -99,7 +99,7 @@ export function transformOrder(raw: BackendOrderInfo): OrderInfo {
  */
 export interface OrderForm {
   orderId: string
-  amount: number       // 前端用元
+  amount: number // 前端用元
 }
 
 /**
@@ -107,7 +107,7 @@ export interface OrderForm {
  */
 export interface BackendOrderForm {
   order_id: string
-  amount: string       // 后端要分为单位的字符串
+  amount: string // 后端要分为单位的字符串
 }
 
 /**

@@ -1,6 +1,6 @@
-import type { SourceType } from '../types/requirement.js'
 import type { SourceConfig } from '../types/config.js'
-import { BaseAdapter } from './base.js'
+import type { SourceType } from '../types/requirement.js'
+import type { BaseAdapter } from './base.js'
 import { OnesAdapter } from './ones.js'
 
 const ADAPTER_MAP: Record<string, new (

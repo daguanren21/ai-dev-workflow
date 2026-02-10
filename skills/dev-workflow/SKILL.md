@@ -13,6 +13,38 @@ metadata:
 
 # Dev Workflow
 
+## Setup
+
+Install this skill:
+
+```bash
+npx skills add daguanren21/ai-dev-workflow
+```
+
+Install to a specific agent with `-a`:
+
+```bash
+npx skills add daguanren21/ai-dev-workflow -a claude-code
+npx skills add daguanren21/ai-dev-workflow -a cursor
+```
+
+**Prerequisites:**
+
+1. Install [find-skills](https://github.com/vercel-labs/skills) for community skill discovery:
+
+```bash
+npx skills add vercel-labs/skills --skill find-skills -a claude-code
+```
+
+2. (Optional) Install companion MCP servers based on your requirement source:
+
+| Source | MCP Server |
+|--------|-----------|
+| ONES | `@ai-dev/requirements` (bundled) |
+| GitHub | [github/github-mcp-server](https://github.com/github/github-mcp-server) |
+| Jira | [Atlassian Rovo MCP](https://www.atlassian.com/blog/announcements/remote-mcp-server) |
+| Figma | [Figma MCP Server](https://developers.figma.com/docs/figma-mcp-server/) |
+
 ## Overview
 
 Requirement-driven AI-assisted development workflow. From requirements to user stories, from user stories to implementation plans, from plans to code.
@@ -106,11 +138,30 @@ Based on user stories + UI resources + matched skills, generate bite-sized plan:
 
 Save to `docs/plans/{feature-name}/implementation-plan.md`.
 
-### Phase 6: Implement Code
+### Phase 6: Requirement Validation
+
+Validate that the design and plan fully cover all product requirements before coding. Follow the detailed spec in `references/requirement-validation.md`.
+
+Core steps:
+1. Build a traceability matrix: requirement → user story → design section → task
+2. Check each requirement for: story coverage, AC completeness, design landing, task breakdown, edge case coverage
+3. Generate `validation-report.md` with coverage stats, uncovered items, and risk items
+4. **PAUSE:** Present the report to the developer for confirmation
+
+Judgment:
+- ✅ Pass: all requirements covered, no high-risk items → proceed to Phase 7
+- ⚠️ Conditional pass: coverage ≥ 90%, uncovered items are low priority → confirm with developer, then proceed
+- ❌ Fail: core requirements uncovered or high-risk unresolved → go back to Phase 5 and revise
+
+Save to `docs/plans/{feature-name}/validation-report.md`.
+
+### Phase 7: Implement Code
 
 **REQUIRED SUB-SKILL:** Use `superpowers:subagent-driven-development` or `superpowers:executing-plans`.
 
 Follow task types and scheduling strategies defined in `references/task-types.md`.
+Follow the 10-step workflow defined in `references/workflow.md`.
+Use task templates from `references/templates/` for task declarations.
 
 Key constraints:
 - Max 5 parallel tasks
@@ -118,7 +169,7 @@ Key constraints:
 - `code:refactor` → serial (global lock)
 - `doc:write` / `test` → parallel
 
-### Phase 7: Verify
+### Phase 8: Verify
 
 1. **Quality gate** (in order, all must pass):
    ```bash
@@ -138,8 +189,9 @@ Key constraints:
 | 3. UI Resources | figma-notes / screenshots | Only if UI stories exist |
 | 4. Skill Matching | matched skills list | No |
 | 5. Plan | `implementation-plan.md` | Per writing-plans skill |
-| 6. Code | Source files + tests | Per executing-plans skill |
-| 7. Verify | lint + type + build pass | No |
+| 6. Requirement Validation | `validation-report.md` | **Yes** — developer confirms |
+| 7. Code | Source files + tests | Per executing-plans skill |
+| 8. Verify | lint + type + build pass | No |
 
 ## Output Structure
 
@@ -150,6 +202,7 @@ docs/plans/{feature-name}/
 ├── ui-references/
 │   ├── figma-notes.md
 │   └── screenshots/
+├── validation-report.md
 └── implementation-plan.md
 ```
 
@@ -158,4 +211,5 @@ docs/plans/{feature-name}/
 - **Skipping user stories** — jumping straight from requirements to code. Always convert to user stories first.
 - **Not pausing for UI** — continuing without UI reference when stories involve UI changes. Always pause and ask.
 - **Ignoring skill matching** — not checking for relevant project/community skills before planning. Always run the 5-level lookup.
+- **Skipping requirement validation** — going straight from plan to code without verifying coverage. Always run the traceability check and pause for developer confirmation.
 - **Wrong parallelism** — running `code:refactor` tasks in parallel. Refactoring is always serial.

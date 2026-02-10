@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { loadConfig, findConfigFile, resolveAuthEnv } from '../../src/config/loader.js'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { findConfigFile, loadConfig, resolveAuthEnv } from '../../src/config/loader.js'
 
-describe('Config Loader', () => {
-  const testDir = join(tmpdir(), 'mcp-config-test-' + Date.now())
+describe('config Loader', () => {
+  const testDir = join(tmpdir(), `mcp-config-test-${Date.now()}`)
   const subDir = join(testDir, 'sub', 'deep')
 
   beforeEach(() => {

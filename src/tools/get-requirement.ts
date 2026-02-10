@@ -1,5 +1,5 @@
-import { z } from 'zod/v4'
 import type { BaseAdapter } from '../adapters/base.js'
+import { z } from 'zod/v4'
 
 export const GetRequirementSchema = z.object({
   id: z.string().describe('The requirement/issue ID'),
@@ -48,9 +48,14 @@ function formatRequirement(req: import('../types/requirement.js').Requirement): 
     `- **Type**: ${req.type}`,
     `- **Assignee**: ${req.assignee ?? 'Unassigned'}`,
     `- **Reporter**: ${req.reporter || 'Unknown'}`,
-    `- **Created**: ${req.createdAt}`,
-    `- **Updated**: ${req.updatedAt}`,
   ]
+
+  if (req.createdAt) {
+    lines.push(`- **Created**: ${req.createdAt}`)
+  }
+  if (req.updatedAt) {
+    lines.push(`- **Updated**: ${req.updatedAt}`)
+  }
 
   if (req.dueDate) {
     lines.push(`- **Due**: ${req.dueDate}`)

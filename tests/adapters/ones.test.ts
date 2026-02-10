@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OnesAdapter } from '../../src/adapters/ones.js'
 import onesFixture from '../fixtures/ones-response.json'
 
@@ -75,7 +75,7 @@ function mockLoginFlow() {
   })
 }
 
-describe('OnesAdapter', () => {
+describe('onesAdapter', () => {
   let adapter: OnesAdapter
 
   beforeEach(() => {

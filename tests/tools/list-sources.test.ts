@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
-import { handleListSources } from '../../src/tools/list-sources.js'
 import type { BaseAdapter } from '../../src/adapters/base.js'
 import type { McpConfig } from '../../src/types/config.js'
+import { describe, expect, it, vi } from 'vitest'
+import { handleListSources } from '../../src/tools/list-sources.js'
 
 function createMockAdapter(sourceType: string): BaseAdapter {
   return {
