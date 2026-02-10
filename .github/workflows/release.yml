@@ -21,7 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
       - run: pnpm install
       - run: pnpm lint
       - run: pnpm typecheck
@@ -31,7 +30,5 @@ jobs:
         run: pnpm dlx changelogithub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish to npm (OIDC)
-        run: |
-          echo "//registry.npmjs.org/:_authToken=" > ~/.npmrc
-          npm publish --provenance --access public
+      - name: Publish to npm (OIDC Trusted Publishing)
+        run: npm publish --provenance --access public
