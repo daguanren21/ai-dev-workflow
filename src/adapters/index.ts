@@ -2,8 +2,6 @@ import type { SourceType } from '../types/requirement.js'
 import type { SourceConfig } from '../types/config.js'
 import { BaseAdapter } from './base.js'
 import { OnesAdapter } from './ones.js'
-import { JiraAdapter } from './jira.js'
-import { GitHubAdapter } from './github.js'
 
 const ADAPTER_MAP: Record<string, new (
   sourceType: SourceType,
@@ -11,8 +9,6 @@ const ADAPTER_MAP: Record<string, new (
   resolvedAuth: Record<string, string>,
 ) => BaseAdapter> = {
   ones: OnesAdapter,
-  jira: JiraAdapter,
-  github: GitHubAdapter,
 }
 
 /**
@@ -34,5 +30,3 @@ export function createAdapter(
 
 export { BaseAdapter } from './base.js'
 export { OnesAdapter } from './ones.js'
-export { JiraAdapter } from './jira.js'
-export { GitHubAdapter } from './github.js'

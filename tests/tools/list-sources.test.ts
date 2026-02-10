@@ -14,31 +14,24 @@ function createMockAdapter(sourceType: string): BaseAdapter {
 describe('handleListSources', () => {
   it('should list all configured sources', async () => {
     const adapters = new Map<string, BaseAdapter>()
-    adapters.set('jira', createMockAdapter('jira'))
-    adapters.set('github', createMockAdapter('github'))
+    adapters.set('ones', createMockAdapter('ones'))
 
     const config: McpConfig = {
       sources: {
-        jira: {
+        ones: {
           enabled: true,
-          apiBase: 'https://jira.example.com',
-          auth: { type: 'token', tokenEnv: 'JIRA_TOKEN' },
-        },
-        github: {
-          enabled: true,
-          apiBase: 'https://api.github.com',
-          auth: { type: 'token', tokenEnv: 'GH_TOKEN' },
+          apiBase: 'https://ones.example.com',
+          auth: { type: 'ones-pkce', emailEnv: 'ONES_EMAIL', passwordEnv: 'ONES_PASS' },
         },
       },
-      defaultSource: 'jira',
+      defaultSource: 'ones',
     }
 
     const result = await handleListSources(adapters, config)
 
-    expect(result.content[0].text).toContain('jira')
-    expect(result.content[0].text).toContain('github')
+    expect(result.content[0].text).toContain('ones')
     expect(result.content[0].text).toContain('(default)')
-    expect(result.content[0].text).toContain('token')
+    expect(result.content[0].text).toContain('ones-pkce')
   })
 
   it('should handle no sources', async () => {

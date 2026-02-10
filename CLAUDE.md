@@ -2,6 +2,14 @@
 
 > Claude Code 专用入口文件。核心规范定义在 `docs/parallel-task/`（唯一真相源）。
 
+## Dev Workflow Skill
+
+完整的 AI 辅助开发工作流 skill，安装后即可跑通全流程：
+
+**Skill 位置:** `skills/dev-workflow/SKILL.md`
+
+流程：需求获取（ONES/GitHub/Jira MCP）→ 用户故事 → UI 资源获取 → 技能匹配 → 实现计划 → 代码实现 → 验证
+
 ## 并行任务框架
 
 本项目使用并行任务框架，所有开发任务须遵循框架规范。
@@ -41,7 +49,10 @@
 
 项目使用以下 MCP server，配置于 `.mcp.json`：
 
-- **requirements** — 需求获取（支持 Ones / Jira / GitHub）
+- **requirements** — ONES 需求获取（本项目内置）
+- **github** — GitHub Issue/PR（[github/github-mcp-server](https://github.com/github/github-mcp-server)）
+- **atlassian** — Jira/Confluence（[Atlassian Rovo MCP](https://www.atlassian.com/blog/announcements/remote-mcp-server)）
+- **figma** — Figma 设计稿读取（[Figma MCP Server](https://github.com/figma/mcp-server-guide)）
 - **context7** — 框架/库官方文档查询
 - **playwright** — 前端页面交互验证
 

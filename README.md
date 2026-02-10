@@ -6,48 +6,47 @@
 
 ## 核心交付物
 
-本项目包含两个核心部分：
-
 | 交付物 | 说明 |
 |-------|------|
-| **并行任务框架文档** (`docs/parallel-task/`) | 通用的 AI 辅助开发规范，定义工作流、任务类型、调度策略、适配模式 |
-| **Requirements MCP Server** (`src/`) | 统一需求获取服务，支持 Ones / Jira / GitHub 等需求管理系统 |
+| **Requirements MCP Server** (`src/`) | 需求获取 MCP 服务，内置 ONES 适配器，可通过 npm 安装 |
+| **Dev Workflow Skill** (`skills/dev-workflow/`) | 自包含的开发工作流 Skill，安装后即可跑通完整流程 |
+| **并行任务框架文档** (`docs/parallel-task/`) | 通用的 AI 辅助开发规范，定义工作流、任务类型、调度策略 |
 
 ---
 
 ## 快速开始
 
-### 方式一：使用框架文档
-
-将 `docs/parallel-task/` 复制到你的项目中，并创建对应的 AI 工具入口文件：
+### 1. 安装 MCP Server
 
 ```bash
-# 1. 复制核心规范文档
-cp -r docs/parallel-task/ <你的项目>/docs/parallel-task/
-
-# 2. 复制 AI 工具入口文件（按需选择）
-cp AGENTS.md <你的项目>/          # Codex / Qodo / Cursor
-cp CLAUDE.md <你的项目>/          # Claude Code
-cp -r .kiro/ <你的项目>/          # Kiro
-```
-
-### 方式二：安装 MCP Server
-
-```bash
-# 1. 安装
 npm install -g requirements-mcp-server
-
-# 2. 在项目根目录创建配置文件
-cp .requirements-mcp.json.example .requirements-mcp.json
-
-# 3. 配置环境变量（以 Ones 为例）
-export ONES_USERNAME="your-username"
-export ONES_PASSWORD="your-password"
-
-# 4. 在 .mcp.json 中注册 MCP Server
 ```
 
-`.mcp.json` 配置示例：
+### 2. 配置 MCP
+
+在项目根目录创建 `.requirements-mcp.json`：
+
+```json
+{
+  "sources": {
+    "ones": {
+      "baseUrl": "https://your-org.ones.com",
+      "auth": {
+        "type": "ones-pkce",
+        "envMapping": {
+          "username": "ONES_ACCOUNT",
+          "password": "ONES_PASSWORD"
+        }
+      }
+    }
+  },
+  "defaultSource": "ones"
+}
+```
+
+### 3. 注册到 AI 工具
+
+在 `.mcp.json` 中添加：
 
 ```json
 {
@@ -56,9 +55,41 @@ export ONES_PASSWORD="your-password"
       "command": "npx",
       "args": ["requirements-mcp"],
       "env": {
-        "ONES_USERNAME": "${ONES_USERNAME}",
+        "ONES_ACCOUNT": "${ONES_ACCOUNT}",
         "ONES_PASSWORD": "${ONES_PASSWORD}"
       }
+    }
+  }
+}
+```
+
+### 4. 安装 Dev Workflow Skill（可选）
+
+```bash
+npx skills add ai-dev-workflow/skills/dev-workflow
+```
+
+安装后，AI 编码工具会自动识别并使用 dev-workflow skill 驱动完整的开发流程。
+
+### 5. 搭配其他 MCP Server（可选）
+
+需求不限于 ONES，可搭配官方 MCP Server 获取 GitHub / Jira 需求：
+
+```json
+{
+  "mcpServers": {
+    "requirements": {
+      "command": "npx",
+      "args": ["requirements-mcp"],
+      "env": { "ONES_ACCOUNT": "${ONES_ACCOUNT}", "ONES_PASSWORD": "${ONES_PASSWORD}" }
+    },
+    "github": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", "ghcr.io/github/github-mcp-server"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+    },
+    "figma": {
+      "url": "http://127.0.0.1:3845/mcp"
     },
     "context7": {
       "command": "npx",
@@ -74,16 +105,35 @@ export ONES_PASSWORD="your-password"
 
 ---
 
-## 技术栈
+## 支持的需求管理平台
 
-| 技术 | 用途 |
-|-----|------|
-| TypeScript | MCP Server 开发语言 |
-| [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MCP 协议 SDK |
-| [Zod](https://zod.dev/) | 参数校验与类型推导 |
-| [tsdown](https://github.com/nicepkg/tsdown) | 构建工具 |
-| [Vitest](https://vitest.dev/) | 测试框架 |
-| Node.js >= 20 | 运行时 |
+| 平台 | 接入方式 | 说明 |
+|-----|---------|------|
+| ONES | 内置适配器 | 本项目 MCP Server 直接支持，OAuth2 PKCE 认证 |
+| GitHub Issues | 外置 MCP | 使用 [github/github-mcp-server](https://github.com/github/github-mcp-server) |
+| Jira | 外置 MCP | 使用 [Atlassian Rovo MCP Server](https://www.atlassian.com/blog/announcements/remote-mcp-server) |
+
+> 本项目采用适配器架构（`BaseAdapter`），如需将新平台作为内置适配器，扩展 `SourceType` 并实现 `BaseAdapter` 即可。
+
+---
+
+## Dev Workflow Skill
+
+自包含的 AI 辅助开发工作流 Skill，安装后自动驱动 7 个阶段：
+
+```
+需求获取 → 用户故事 → UI 资源获取 → 技能匹配 → 实现计划 → 代码实现 → 验证
+```
+
+Skill 目录结构：
+
+```
+skills/dev-workflow/
+├── SKILL.md                         # Skill 入口（YAML frontmatter + 工作流定义）
+└── references/
+    ├── task-types.md                # 任务类型、调度策略、声明语法、模板
+    └── service-transform.md         # Service 层 Transform 适配模式
+```
 
 ---
 
@@ -96,12 +146,18 @@ ai-dev-workflow/
 ├── .kiro/steering/                  # Kiro 入口
 │   └── parallel-task.md
 │
+├── skills/dev-workflow/             # Dev Workflow Skill（自包含工作流）
+│   ├── SKILL.md
+│   └── references/
+│       ├── task-types.md
+│       └── service-transform.md
+│
 ├── docs/parallel-task/              # 并行任务框架核心文档（SSOT）
-│   ├── README.md                    # 框架说明
-│   ├── workflow.md                  # 10 步工作流定义
-│   ├── task-types.md                # 任务类型与调度策略
-│   ├── service-transform.md         # Service 层 Transform 适配模式
-│   └── templates/                   # 任务声明模板
+│   ├── README.md
+│   ├── workflow.md
+│   ├── task-types.md
+│   ├── service-transform.md
+│   └── templates/
 │       ├── code-dev-task.md
 │       ├── code-fix-task.md
 │       ├── code-refactor-task.md
@@ -110,18 +166,26 @@ ai-dev-workflow/
 │       └── test-task.md
 │
 ├── src/                             # Requirements MCP Server 源码
-│   ├── adapters/                    # 平台适配器（Ones / Jira / GitHub）
-│   │   └── base.ts
-│   ├── config/                      # 配置加载
-│   │   └── loader.ts
-│   ├── types/                       # 类型定义
+│   ├── index.ts                     # 入口 & MCP Server 定义
+│   ├── adapters/
+│   │   ├── base.ts                  # BaseAdapter 抽象类
+│   │   ├── ones.ts                  # ONES 适配器
+│   │   └── index.ts                 # 工厂函数 createAdapter()
+│   ├── config/
+│   │   └── loader.ts                # 配置文件加载 & 环境变量解析
+│   ├── tools/
+│   │   ├── get-requirement.ts       # get_requirement 工具
+│   │   ├── search-requirements.ts   # search_requirements 工具
+│   │   └── list-sources.ts          # list_sources 工具
+│   ├── types/
 │   │   ├── auth.ts
 │   │   ├── config.ts
 │   │   └── requirement.ts
-│   └── utils/                       # 工具函数
+│   └── utils/
 │       ├── http.ts
 │       └── map-status.ts
 │
+├── tests/                           # 测试
 ├── .requirements-mcp.json.example   # MCP Server 配置模板
 ├── package.json
 ├── tsconfig.json
@@ -135,7 +199,7 @@ ai-dev-workflow/
 
 | 工具 | 入口文件 | 说明 |
 |-----|---------|------|
-| Claude Code | `CLAUDE.md` | 使用 @ 语法引用规范文件 |
+| Claude Code | `CLAUDE.md` | 使用 `@` 语法引用规范文件 |
 | OpenAI Codex | `AGENTS.md` | 通用入口 |
 | Cursor | `AGENTS.md` | 通用入口 |
 | Qodo | `AGENTS.md` | 通用入口 |
@@ -143,13 +207,17 @@ ai-dev-workflow/
 
 ---
 
-## 支持的需求管理平台
+## 技术栈
 
-| 平台 | 认证方式 | 状态 |
-|-----|---------|------|
-| Ones | Basic Auth（用户名 + 密码） | 开发中 |
-| Jira | API Token | 开发中 |
-| GitHub Issues | Personal Access Token | 开发中 |
+| 技术 | 用途 |
+|-----|------|
+| TypeScript | MCP Server 开发语言 |
+| [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MCP 协议 SDK |
+| [Zod](https://zod.dev/) | 参数校验与类型推导 |
+| [tsdown](https://github.com/nicepkg/tsdown) | 构建工具（ESM + CJS + dts） |
+| [Vitest](https://vitest.dev/) | 测试框架 |
+| [Changesets](https://github.com/changesets/changesets) | 版本管理与 Changelog |
+| Node.js >= 20 | 运行时 |
 
 ---
 
@@ -170,6 +238,21 @@ pnpm test
 
 # 类型检查
 pnpm lint
+```
+
+### 发版流程
+
+本项目使用 [Changesets](https://github.com/changesets/changesets) 管理版本和 Changelog：
+
+```bash
+# 1. 添加变更记录
+pnpm changeset
+
+# 2. 更新版本号 & 生成 CHANGELOG
+pnpm version
+
+# 3. 构建并发布到 npm
+pnpm release
 ```
 
 ---

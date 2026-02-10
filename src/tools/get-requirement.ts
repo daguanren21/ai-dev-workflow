@@ -2,7 +2,7 @@ import { z } from 'zod/v4'
 import type { BaseAdapter } from '../adapters/base.js'
 
 export const GetRequirementSchema = z.object({
-  id: z.string().describe('The requirement/issue ID (e.g., "PROJ-123" for Jira, "#456" for GitHub)'),
+  id: z.string().describe('The requirement/issue ID'),
   source: z.string().optional().describe('Source to fetch from. If omitted, uses the default source.'),
 })
 

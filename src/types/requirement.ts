@@ -1,4 +1,8 @@
-export type SourceType = 'ones' | 'jira' | 'github' | 'gitlab'
+/**
+ * Bundled source types. To add new sources, extend this union and implement BaseAdapter.
+ * GitHub/Jira users: use their official MCP servers directly.
+ */
+export type SourceType = 'ones'
 
 export type RequirementStatus = 'open' | 'in_progress' | 'done' | 'closed'
 

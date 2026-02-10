@@ -77,7 +77,8 @@ describe('Config Loader', () => {
 
   describe('loadConfig', () => {
     beforeEach(() => {
-      vi.stubEnv('TEST_TOKEN', 'my-token')
+      vi.stubEnv('TEST_EMAIL', 'test@example.com')
+      vi.stubEnv('TEST_PASS', 'password123')
     })
 
     afterEach(() => {
@@ -87,45 +88,37 @@ describe('Config Loader', () => {
     it('should load and validate a valid config', () => {
       const config = {
         sources: {
-          jira: {
+          ones: {
             enabled: true,
-            apiBase: 'https://jira.example.com',
-            auth: { type: 'token', tokenEnv: 'TEST_TOKEN' },
+            apiBase: 'https://ones.example.com',
+            auth: { type: 'ones-pkce', emailEnv: 'TEST_EMAIL', passwordEnv: 'TEST_PASS' },
           },
         },
-        defaultSource: 'jira',
+        defaultSource: 'ones',
       }
       writeFileSync(join(testDir, '.requirements-mcp.json'), JSON.stringify(config))
 
       const result = loadConfig(testDir)
 
       expect(result.sources).toHaveLength(1)
-      expect(result.sources[0].type).toBe('jira')
-      expect(result.sources[0].resolvedAuth.token).toBe('my-token')
-      expect(result.config.defaultSource).toBe('jira')
+      expect(result.sources[0].type).toBe('ones')
+      expect(result.sources[0].resolvedAuth.email).toBe('test@example.com')
+      expect(result.config.defaultSource).toBe('ones')
     })
 
     it('should skip disabled sources', () => {
       const config = {
         sources: {
-          jira: {
+          ones: {
             enabled: false,
-            apiBase: 'https://jira.example.com',
-            auth: { type: 'token', tokenEnv: 'TEST_TOKEN' },
-          },
-          github: {
-            enabled: true,
-            apiBase: 'https://api.github.com',
-            auth: { type: 'token', tokenEnv: 'TEST_TOKEN' },
+            apiBase: 'https://ones.example.com',
+            auth: { type: 'ones-pkce', emailEnv: 'TEST_EMAIL', passwordEnv: 'TEST_PASS' },
           },
         },
       }
       writeFileSync(join(testDir, '.requirements-mcp.json'), JSON.stringify(config))
 
-      const result = loadConfig(testDir)
-
-      expect(result.sources).toHaveLength(1)
-      expect(result.sources[0].type).toBe('github')
+      expect(() => loadConfig(testDir)).toThrow('No enabled sources')
     })
 
     it('should throw if no config file found', () => {
@@ -141,10 +134,10 @@ describe('Config Loader', () => {
     it('should throw if schema validation fails', () => {
       writeFileSync(join(testDir, '.requirements-mcp.json'), JSON.stringify({
         sources: {
-          jira: {
+          ones: {
             enabled: true,
             apiBase: 'not-a-url',
-            auth: { type: 'token' },
+            auth: { type: 'ones-pkce' },
           },
         },
       }))
@@ -155,10 +148,10 @@ describe('Config Loader', () => {
     it('should throw if all sources are disabled', () => {
       const config = {
         sources: {
-          jira: {
+          ones: {
             enabled: false,
-            apiBase: 'https://jira.example.com',
-            auth: { type: 'token', tokenEnv: 'TEST_TOKEN' },
+            apiBase: 'https://ones.example.com',
+            auth: { type: 'ones-pkce', emailEnv: 'TEST_EMAIL', passwordEnv: 'TEST_PASS' },
           },
         },
       }

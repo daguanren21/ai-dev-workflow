@@ -47,14 +47,11 @@ const SourceConfigSchema = z.object({
 
 const SourcesSchema = z.object({
   ones: SourceConfigSchema.optional(),
-  jira: SourceConfigSchema.optional(),
-  github: SourceConfigSchema.optional(),
-  gitlab: SourceConfigSchema.optional(),
 })
 
 const McpConfigSchema = z.object({
   sources: SourcesSchema,
-  defaultSource: z.enum(['ones', 'jira', 'github', 'gitlab']).optional(),
+  defaultSource: z.enum(['ones']).optional(),
 })
 
 const CONFIG_FILENAME = '.requirements-mcp.json'

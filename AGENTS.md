@@ -5,6 +5,16 @@
 
 ---
 
+## Dev Workflow Skill
+
+完整的 AI 辅助开发工作流 skill，安装后即可跑通全流程：
+
+**Skill 位置:** `skills/dev-workflow/SKILL.md`
+
+流程：需求获取（ONES/GitHub/Jira MCP）→ 用户故事 → UI 资源获取 → 技能匹配 → 实现计划 → 代码实现 → 验证
+
+---
+
 ## 并行任务框架
 
 本项目使用并行任务框架进行 AI 辅助开发。框架支持多种 AI 编码工具协同工作，通过智能任务调度实现高效的并行开发。

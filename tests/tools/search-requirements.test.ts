@@ -7,7 +7,7 @@ const mockSearchResult: SearchResult = {
   items: [
     {
       id: 'TEST-001',
-      source: 'jira',
+      source: 'ones',
       title: 'Test Feature',
       description: 'A test description that is moderately long',
       status: 'open',
@@ -30,7 +30,7 @@ const mockSearchResult: SearchResult = {
 
 function createMockAdapter(result?: SearchResult): BaseAdapter {
   return {
-    sourceType: 'jira',
+    sourceType: 'ones',
     getRequirement: vi.fn(),
     searchRequirements: vi.fn().mockResolvedValue(result ?? mockSearchResult),
   } as unknown as BaseAdapter
@@ -41,11 +41,11 @@ describe('handleSearchRequirements', () => {
 
   beforeEach(() => {
     adapters = new Map()
-    adapters.set('jira', createMockAdapter())
+    adapters.set('ones', createMockAdapter())
   })
 
   it('should return formatted search results', async () => {
-    const result = await handleSearchRequirements({ query: 'test' }, adapters, 'jira')
+    const result = await handleSearchRequirements({ query: 'test' }, adapters, 'ones')
 
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
@@ -55,21 +55,21 @@ describe('handleSearchRequirements', () => {
   })
 
   it('should handle empty results', async () => {
-    adapters.set('jira', createMockAdapter({
+    adapters.set('ones', createMockAdapter({
       items: [],
       total: 0,
       page: 1,
       pageSize: 20,
     }))
 
-    const result = await handleSearchRequirements({ query: 'none' }, adapters, 'jira')
+    const result = await handleSearchRequirements({ query: 'none' }, adapters, 'ones')
 
     expect(result.content[0].text).toContain('0')
   })
 
   it('should truncate long descriptions', async () => {
     const longDesc = 'A'.repeat(300)
-    adapters.set('jira', createMockAdapter({
+    adapters.set('ones', createMockAdapter({
       items: [{
         ...mockSearchResult.items[0],
         description: longDesc,
@@ -79,7 +79,7 @@ describe('handleSearchRequirements', () => {
       pageSize: 20,
     }))
 
-    const result = await handleSearchRequirements({ query: 'test' }, adapters, 'jira')
+    const result = await handleSearchRequirements({ query: 'test' }, adapters, 'ones')
 
     expect(result.content[0].text).toContain('...')
     // Should not contain the full 300-char string
@@ -88,7 +88,7 @@ describe('handleSearchRequirements', () => {
 
   it('should throw if source not available', async () => {
     await expect(
-      handleSearchRequirements({ query: 'test', source: 'gitlab' }, adapters, undefined),
+      handleSearchRequirements({ query: 'test', source: 'nonexistent' }, adapters, undefined),
     ).rejects.toThrow('not configured')
   })
 })

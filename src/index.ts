@@ -70,7 +70,7 @@ async function main() {
   // Register tools
   server.tool(
     'get_requirement',
-    'Fetch a single requirement/issue by its ID from a configured source (ONES, Jira, or GitHub)',
+    'Fetch a single requirement/issue by its ID from a configured source (ONES)',
     GetRequirementSchema.shape,
     async (params) => {
       try {

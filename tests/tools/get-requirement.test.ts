@@ -5,7 +5,7 @@ import type { Requirement } from '../../src/types/requirement.js'
 
 const mockRequirement: Requirement = {
   id: 'TEST-001',
-  source: 'jira',
+  source: 'ones',
   title: 'Test Requirement',
   description: 'A test description',
   status: 'open',
@@ -23,7 +23,7 @@ const mockRequirement: Requirement = {
 
 function createMockAdapter(overrides?: Partial<Requirement>): BaseAdapter {
   return {
-    sourceType: 'jira',
+    sourceType: 'ones',
     getRequirement: vi.fn().mockResolvedValue({ ...mockRequirement, ...overrides }),
     searchRequirements: vi.fn(),
   } as unknown as BaseAdapter
@@ -34,11 +34,11 @@ describe('handleGetRequirement', () => {
 
   beforeEach(() => {
     adapters = new Map()
-    adapters.set('jira', createMockAdapter())
+    adapters.set('ones', createMockAdapter())
   })
 
   it('should return formatted requirement text', async () => {
-    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'jira')
+    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'ones')
 
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
@@ -49,15 +49,15 @@ describe('handleGetRequirement', () => {
   })
 
   it('should use explicit source over default', async () => {
-    adapters.set('github', createMockAdapter({ source: 'github', id: 'GH-001' }))
+    adapters.set('ones', createMockAdapter({ id: 'ONES-001' }))
 
     const result = await handleGetRequirement(
-      { id: 'GH-001', source: 'github' },
+      { id: 'ONES-001', source: 'ones' },
       adapters,
-      'jira',
+      'ones',
     )
 
-    expect(result.content[0].text).toContain('GH-001')
+    expect(result.content[0].text).toContain('ONES-001')
   })
 
   it('should throw if no source specified and no default', async () => {
@@ -68,18 +68,18 @@ describe('handleGetRequirement', () => {
 
   it('should throw if source not configured', async () => {
     await expect(
-      handleGetRequirement({ id: 'TEST-001', source: 'gitlab' }, adapters, undefined),
+      handleGetRequirement({ id: 'TEST-001', source: 'nonexistent' }, adapters, undefined),
     ).rejects.toThrow('not configured')
   })
 
   it('should include attachments in output', async () => {
-    adapters.set('jira', createMockAdapter({
+    adapters.set('ones', createMockAdapter({
       attachments: [
         { id: 'a1', name: 'doc.pdf', url: 'https://example.com/doc.pdf', mimeType: 'application/pdf', size: 1024 },
       ],
     }))
 
-    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'jira')
+    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'ones')
 
     expect(result.content[0].text).toContain('doc.pdf')
     expect(result.content[0].text).toContain('Attachments')

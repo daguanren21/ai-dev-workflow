@@ -1,5 +1,11 @@
 # Parallel Task Framework
 
+## Dev Workflow Skill
+
+Self-contained development workflow skill: `skills/dev-workflow/SKILL.md`
+
+Flow: Requirements (ONES/GitHub/Jira MCP) → User Stories → UI Resources → Skill Matching → Implementation Plan → Code → Verification
+
 ## Core Docs
 
 - Read `docs/parallel-task/README.md` for the full specification (SSOT)
