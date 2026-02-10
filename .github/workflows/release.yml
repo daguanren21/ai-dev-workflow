@@ -21,6 +21,8 @@ jobs:
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
       - run: pnpm install
+      - run: pnpm lint
+      - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm dlx changelogithub
         env:
