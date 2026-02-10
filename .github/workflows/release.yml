@@ -4,31 +4,11 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-
 permissions:
-  id-token: write
   contents: write
-
+  id-token: write # to use OpenID Connect token for provenance (changesets/action)
 jobs:
   release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: 'https://registry.npmjs.org'
-      - run: pnpm install
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm build
-      - name: Generate changelog
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: pnpm dlx changelogithub
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - run: npm publish --provenance --access public
+    uses: sxzz/workflows/.github/workflows/release.yml@v1
+    with:
+      publish: true
