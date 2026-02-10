@@ -58,7 +58,7 @@
 
 ### ② 需求获取
 
-通过 `@ai-dev/requirements` 自动获取需求详情，输出 `requirements.md`。
+通过 `ai-dev-requirements` 自动获取需求详情，输出 `requirements.md`。
 
 ### ③ 技术设计
 

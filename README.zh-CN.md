@@ -36,7 +36,7 @@ npx skills add daguanren21/ai-dev-workflow -a claude-code
 如果使用 ONES 进行需求管理：
 
 ```bash
-npm install -g @ai-dev/requirements
+npm install -g ai-dev-requirements
 ```
 
 在项目根目录创建 `.requirements-mcp.json`：
@@ -45,13 +45,12 @@ npm install -g @ai-dev/requirements
 {
   "sources": {
     "ones": {
-      "baseUrl": "https://your-org.ones.com",
+      "enabled": true,
+      "apiBase": "https://your-org.ones.com",
       "auth": {
         "type": "ones-pkce",
-        "envMapping": {
-          "username": "ONES_ACCOUNT",
-          "password": "ONES_PASSWORD"
-        }
+        "emailEnv": "ONES_ACCOUNT",
+        "passwordEnv": "ONES_PASSWORD"
       }
     }
   },
@@ -66,7 +65,7 @@ npm install -g @ai-dev/requirements
   "mcpServers": {
     "requirements": {
       "command": "npx",
-      "args": ["@ai-dev/requirements"],
+      "args": ["ai-dev-requirements"],
       "env": {
         "ONES_ACCOUNT": "${ONES_ACCOUNT}",
         "ONES_PASSWORD": "${ONES_PASSWORD}"

@@ -36,7 +36,7 @@ Once installed, AI coding tools will automatically use the dev-workflow skill to
 If you use ONES for requirement management:
 
 ```bash
-npm install -g @ai-dev/requirements
+npm install -g ai-dev-requirements
 ```
 
 Create `.requirements-mcp.json` in your project root:
@@ -65,7 +65,7 @@ Add to your `.mcp.json`:
   "mcpServers": {
     "requirements": {
       "command": "npx",
-      "args": ["@ai-dev/requirements"],
+      "args": ["ai-dev-requirements"],
       "env": {
         "ONES_ACCOUNT": "${ONES_ACCOUNT}",
         "ONES_PASSWORD": "${ONES_PASSWORD}"
