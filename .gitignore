@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.requirements-mcp.json
+*.tsbuildinfo
+coverage/
+.DS_Store
+Thumbs.db

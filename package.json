@@ -1,0 +1,49 @@
+{
+  "name": "requirements-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for fetching requirements from ONES/Jira/GitHub, bundled with a parallel task framework for AI-assisted development",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "requirements-mcp": "./dist/index.mjs"
+  },
+  "files": [
+    "dist",
+    "docs/parallel-task"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "start": "node --env-file=.env ./dist/index.mjs",
+    "dev": "node --env-file=.env --loader tsx src/index.ts",
+    "inspect": "npx @modelcontextprotocol/inspector node --env-file=.env ./dist/index.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
+  },
+  "keywords": [
+    "mcp",
+    "requirements",
+    "ones",
+    "jira",
+    "github",
+    "ai-dev-workflow",
+    "parallel-task"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.2",
+    "tsdown": "^0.20.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "sources": {
+    "ones": {
+      "enabled": true,
+      "apiBase": "https://your-company.ones.com",
+      "auth": {
+        "type": "ones-pkce",
+        "emailEnv": "ONES_ACCOUNT",
+        "passwordEnv": "ONES_PASSWORD"
+      },
+    },
+    "jira": {
+      "enabled": false,
+      "apiBase": "https://your-company.atlassian.net",
+      "auth": {
+        "type": "token",
+        "tokenEnv": "JIRA_API_TOKEN"
+      }
+    },
+    "github": {
+      "enabled": false,
+      "apiBase": "https://api.github.com",
+      "auth": {
+        "type": "token",
+        "tokenEnv": "GITHUB_TOKEN"
+      },
+      "options": {
+        "owner": "your-org",
+        "repo": "your-repo"
+      }
+    }
+  },
+  "defaultSource": "ones"
+}

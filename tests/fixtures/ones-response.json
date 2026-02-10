@@ -1,0 +1,59 @@
+{
+  "data": {
+    "task": {
+      "uuid": "abc-123-def",
+      "number": 95945,
+      "name": "实现用户认证模块",
+      "desc": "需要实现基于 JWT 的用户认证功能，包括登录、注册、Token 刷新。",
+      "issueType": { "uuid": "15eiaFu6", "name": "需求" },
+      "status": { "uuid": "s1", "name": "进行中", "category": "in_progress" },
+      "priority": { "value": "high" },
+      "assign": { "uuid": "u1", "name": "张三" },
+      "project": { "uuid": "p1", "name": "StarCloud" },
+      "parent": null,
+      "relatedTasks": [
+        {
+          "uuid": "task-001",
+          "number": 95946,
+          "name": "前端页面开发",
+          "issueType": { "uuid": "Q6tBhtVC", "name": "任务" },
+          "status": { "uuid": "s2", "name": "未开始", "category": "to_do" },
+          "assign": { "uuid": "u2", "name": "李四" }
+        }
+      ]
+    }
+  },
+  "search": {
+    "data": {
+      "buckets": [
+        {
+          "key": "default",
+          "tasks": [
+            {
+              "key": "task-abc-123-def",
+              "uuid": "abc-123-def",
+              "number": 95945,
+              "name": "实现用户认证模块",
+              "issueType": { "uuid": "15eiaFu6", "name": "需求" },
+              "status": { "uuid": "s1", "name": "进行中", "category": "in_progress" },
+              "priority": { "value": "high" },
+              "assign": { "uuid": "u1", "name": "张三" },
+              "project": { "uuid": "p1", "name": "StarCloud" }
+            },
+            {
+              "key": "task-xyz-456",
+              "uuid": "xyz-456",
+              "number": 95947,
+              "name": "数据库迁移脚本",
+              "issueType": { "uuid": "Q6tBhtVC", "name": "任务" },
+              "status": { "uuid": "s2", "name": "未开始", "category": "to_do" },
+              "priority": { "value": "normal" },
+              "assign": { "uuid": "u1", "name": "张三" },
+              "project": { "uuid": "p1", "name": "StarCloud" }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
