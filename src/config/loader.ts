@@ -114,18 +114,66 @@ export interface LoadConfigResult {
 }
 
 /**
- * Load and validate the MCP config file.
- * Searches from `startDir` (defaults to cwd) upward.
+ * Try to build config purely from environment variables.
+ * Required env vars: ONES_API_BASE, ONES_ACCOUNT, ONES_PASSWORD
+ * Returns null if the required env vars are not all present.
+ */
+function loadConfigFromEnv(): McpConfig | null {
+  const apiBase = process.env.ONES_API_BASE
+  const account = process.env.ONES_ACCOUNT
+  const password = process.env.ONES_PASSWORD
+
+  if (!apiBase || !account || !password) {
+    return null
+  }
+
+  return {
+    sources: {
+      ones: {
+        enabled: true,
+        apiBase,
+        auth: {
+          type: 'ones-pkce',
+          emailEnv: 'ONES_ACCOUNT',
+          passwordEnv: 'ONES_PASSWORD',
+        },
+      },
+    },
+    defaultSource: 'ones',
+  }
+}
+
+/**
+ * Load and validate the MCP config.
+ * Priority: env vars (ONES_API_BASE + ONES_ACCOUNT + ONES_PASSWORD) > config file (.requirements-mcp.json).
+ * Searches from `startDir` (defaults to cwd) upward for the file.
  */
 export function loadConfig(startDir?: string): LoadConfigResult {
+  // 1. Try environment variables first (simplest setup for MCP)
+  const envConfig = loadConfigFromEnv()
+  if (envConfig) {
+    const sources: ResolvedSource[] = []
+    for (const [type, sourceConfig] of Object.entries(envConfig.sources)) {
+      if (sourceConfig && sourceConfig.enabled) {
+        const resolvedAuth = resolveAuthEnv(sourceConfig.auth)
+        sources.push({
+          type: type as SourceType,
+          config: sourceConfig,
+          resolvedAuth,
+        })
+      }
+    }
+    return { config: envConfig, sources, configPath: 'env' }
+  }
+
+  // 2. Fall back to config file
   const dir = startDir ?? process.cwd()
   const configPath = findConfigFile(dir)
 
   if (!configPath) {
     throw new Error(
-      `Config file "${CONFIG_FILENAME}" not found. `
-      + `Searched from "${dir}" to root. `
-      + `Create one based on .requirements-mcp.json.example`,
+      `Config not found. Either set env vars (ONES_API_BASE, ONES_ACCOUNT, ONES_PASSWORD) `
+      + `or create "${CONFIG_FILENAME}" based on .requirements-mcp.json.example`,
     )
   }
 
@@ -167,4 +215,4 @@ export function loadConfig(startDir?: string): LoadConfigResult {
   return { config, sources, configPath }
 }
 
-export { findConfigFile, resolveAuthEnv }
+export { findConfigFile, loadConfigFromEnv, resolveAuthEnv }
