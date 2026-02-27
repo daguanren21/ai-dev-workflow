@@ -5,10 +5,5 @@ export default defineConfig({
   format: ['esm', 'cjs'],
   dts: true,
   clean: true,
-  banner: ({ format }) => {
-    if (format === 'esm') {
-      return { js: '#!/usr/bin/env node' }
-    }
-    return {}
-  },
+  banner: { js: '#!/usr/bin/env node' },
 })
