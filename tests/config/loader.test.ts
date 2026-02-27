@@ -2,7 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { findConfigFile, loadConfig, resolveAuthEnv } from '../../src/config/loader.js'
+import { findConfigFile, loadConfig, loadConfigFromEnv, resolveAuthEnv } from '../../src/config/loader.js'
 
 describe('config Loader', () => {
   const testDir = join(tmpdir(), `mcp-config-test-${Date.now()}`)
@@ -19,23 +19,18 @@ describe('config Loader', () => {
   describe('findConfigFile', () => {
     it('should find config in current directory', () => {
       writeFileSync(join(testDir, '.requirements-mcp.json'), '{}')
-
       const result = findConfigFile(testDir)
-
       expect(result).toBe(join(testDir, '.requirements-mcp.json'))
     })
 
     it('should find config in parent directory', () => {
       writeFileSync(join(testDir, '.requirements-mcp.json'), '{}')
-
       const result = findConfigFile(subDir)
-
       expect(result).toBe(join(testDir, '.requirements-mcp.json'))
     })
 
     it('should return null if not found', () => {
       const result = findConfigFile(subDir)
-
       expect(result).toBeNull()
     })
   })
@@ -53,7 +48,6 @@ describe('config Loader', () => {
 
     it('should resolve token auth env vars', () => {
       const result = resolveAuthEnv({ type: 'token', tokenEnv: 'TEST_TOKEN' })
-
       expect(result.token).toBe('my-secret-token')
     })
 
@@ -63,7 +57,6 @@ describe('config Loader', () => {
         usernameEnv: 'TEST_USER',
         passwordEnv: 'TEST_PASS',
       })
-
       expect(result.username).toBe('admin')
       expect(result.password).toBe('password123')
     })
@@ -72,6 +65,31 @@ describe('config Loader', () => {
       expect(() =>
         resolveAuthEnv({ type: 'token', tokenEnv: 'NONEXISTENT_VAR' }),
       ).toThrow('NONEXISTENT_VAR')
+    })
+  })
+
+  describe('loadConfigFromEnv', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    it('should return config when all env vars are set', () => {
+      vi.stubEnv('ONES_API_BASE', 'https://ones.example.com')
+      vi.stubEnv('ONES_ACCOUNT', 'test@example.com')
+      vi.stubEnv('ONES_PASSWORD', 'secret')
+
+      const config = loadConfigFromEnv()
+      expect(config).not.toBeNull()
+      expect(config!.sources.ones?.apiBase).toBe('https://ones.example.com')
+      expect(config!.sources.ones?.auth.type).toBe('ones-pkce')
+      expect(config!.defaultSource).toBe('ones')
+    })
+
+    it('should return null when env vars are missing', () => {
+      vi.stubEnv('ONES_API_BASE', 'https://ones.example.com')
+      // Missing ONES_ACCOUNT and ONES_PASSWORD
+      const config = loadConfigFromEnv()
+      expect(config).toBeNull()
     })
   })
 
@@ -85,7 +103,19 @@ describe('config Loader', () => {
       vi.unstubAllEnvs()
     })
 
-    it('should load and validate a valid config', () => {
+    it('should load config from env vars (priority over file)', () => {
+      vi.stubEnv('ONES_API_BASE', 'https://ones.example.com')
+      vi.stubEnv('ONES_ACCOUNT', 'test@example.com')
+      vi.stubEnv('ONES_PASSWORD', 'password123')
+
+      const result = loadConfig(subDir)
+      expect(result.configPath).toBe('env')
+      expect(result.sources).toHaveLength(1)
+      expect(result.sources[0].type).toBe('ones')
+      expect(result.sources[0].resolvedAuth.email).toBe('test@example.com')
+    })
+
+    it('should fall back to config file when env vars are missing', () => {
       const config = {
         sources: {
           ones: {
@@ -99,14 +129,13 @@ describe('config Loader', () => {
       writeFileSync(join(testDir, '.requirements-mcp.json'), JSON.stringify(config))
 
       const result = loadConfig(testDir)
-
       expect(result.sources).toHaveLength(1)
       expect(result.sources[0].type).toBe('ones')
       expect(result.sources[0].resolvedAuth.email).toBe('test@example.com')
       expect(result.config.defaultSource).toBe('ones')
     })
 
-    it('should skip disabled sources', () => {
+    it('should skip disabled sources from file', () => {
       const config = {
         sources: {
           ones: {
@@ -121,13 +150,12 @@ describe('config Loader', () => {
       expect(() => loadConfig(testDir)).toThrow('No enabled sources')
     })
 
-    it('should throw if no config file found', () => {
-      expect(() => loadConfig(subDir)).toThrow('not found')
+    it('should throw if no config file and no env vars', () => {
+      expect(() => loadConfig(subDir)).toThrow('Config not found')
     })
 
     it('should throw if JSON is invalid', () => {
       writeFileSync(join(testDir, '.requirements-mcp.json'), '{invalid}')
-
       expect(() => loadConfig(testDir)).toThrow('Invalid JSON')
     })
 
@@ -141,7 +169,6 @@ describe('config Loader', () => {
           },
         },
       }))
-
       expect(() => loadConfig(testDir)).toThrow('Invalid config')
     })
 
@@ -156,7 +183,6 @@ describe('config Loader', () => {
         },
       }
       writeFileSync(join(testDir, '.requirements-mcp.json'), JSON.stringify(config))
-
       expect(() => loadConfig(testDir)).toThrow('No enabled sources')
     })
   })
