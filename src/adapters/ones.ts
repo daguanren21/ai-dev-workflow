@@ -469,6 +469,98 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   /**
+   * Resolve a fresh signed URL for an attachment resource via ONES attachment API.
+   * Endpoint: /project/api/project/team/{teamUuid}/res/attachment/{resourceUuid}
+   * Returns a redirect URL with a fresh OSS signature.
+   */
+  private async getAttachmentUrl(resourceUuid: string): Promise<string | null> {
+    const session = await this.login()
+    const url = `${this.config.apiBase}/project/api/project/team/${session.teamUuid}/res/attachment/${resourceUuid}?op=${encodeURIComponent('imageMogr2/auto-orient')}`
+
+    try {
+      // First try with redirect: 'manual' to capture 302 Location header
+      const manualRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+        redirect: 'manual',
+      })
+
+      if (manualRes.status === 302 || manualRes.status === 301) {
+        const location = manualRes.headers.get('location')
+        if (location)
+          return location
+      }
+
+      // Fallback: follow redirects and use the final URL
+      const followRes = await fetch(url, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+        redirect: 'follow',
+      })
+
+      // If redirected, response.url will be the final signed URL
+      if (followRes.url && followRes.url !== url) {
+        return followRes.url
+      }
+
+      if (followRes.ok) {
+        const text = await followRes.text()
+        if (text.startsWith('http')) {
+          return text.trim()
+        }
+        try {
+          const data = JSON.parse(text) as { url?: string }
+          return data.url ?? null
+        }
+        catch {
+          return null
+        }
+      }
+
+      console.error(`[getAttachmentUrl] Failed for resource ${resourceUuid}: status ${followRes.status}`)
+      return null
+    }
+    catch (err) {
+      console.error(`[getAttachmentUrl] Error for resource ${resourceUuid}:`, err)
+      return null
+    }
+  }
+
+  /**
+   * Replace stale image URLs in HTML with fresh signed URLs from the attachment API.
+   * Extracts data-uuid from <img> tags and resolves fresh URLs in parallel.
+   */
+  private async refreshImageUrls(html: string): Promise<string> {
+    if (!html)
+      return html
+
+    // Extract all img tags with data-uuid
+    const imgRegex = /<img\s[^>]*data-uuid="([^"]+)"[^>]*>/g
+    const matches = Array.from(html.matchAll(imgRegex))
+
+    if (matches.length === 0)
+      return html
+
+    // Resolve fresh URLs in parallel
+    const replacements = await Promise.all(
+      matches.map(async (match) => {
+        const dataUuid = match[1]
+        const freshUrl = await this.getAttachmentUrl(dataUuid)
+        return { fullMatch: match[0], dataUuid, freshUrl }
+      }),
+    )
+
+    let result = html
+    for (const { fullMatch, freshUrl } of replacements) {
+      if (freshUrl) {
+        // Replace the src attribute in the img tag with the fresh URL
+        const updatedImg = fullMatch.replace(/src="[^"]*"/, `src="${freshUrl}"`)
+        result = result.replace(fullMatch, updatedImg)
+      }
+    }
+
+    return result
+  }
+
+  /**
    * Fetch wiki page content via REST API.
    * Endpoint: /wiki/api/wiki/team/{teamUuid}/online_page/{wikiUuid}/content
    */
@@ -794,12 +886,21 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Issue "${issueKey}" not found`)
     }
 
+    // Fetch fresh description via REST API
+    const taskInfo = await this.fetchTaskInfo(task.uuid)
+    const rawDescription = (taskInfo.desc as string) ?? task.description ?? ''
+    const rawDescRich = (taskInfo.desc_rich as string) ?? task.desc_rich ?? ''
+
+    // Refresh image URLs via attachment API (signed URLs expire after 1 hour)
+    const freshDescription = await this.refreshImageUrls(rawDescription)
+    const freshDescRich = await this.refreshImageUrls(rawDescRich)
+
     return {
       key: task.key,
       uuid: task.uuid,
       name: task.name,
-      description: task.description ?? '',
-      descriptionRich: task.desc_rich ?? '',
+      description: freshDescription,
+      descriptionRich: freshDescRich,
       descriptionText: task.descriptionText ?? '',
       issueTypeName: task.issueType?.name ?? 'Unknown',
       statusName: task.status?.name ?? 'Unknown',

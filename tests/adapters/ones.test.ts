@@ -255,22 +255,50 @@ describe('onesAdapter', () => {
   })
 
   describe('getIssueDetail', () => {
-    it('should fetch issue detail with description and rich text', async () => {
+    it('should fetch issue detail with fresh description from REST API', async () => {
       mockLoginFlow()
+      // 8. GraphQL issue detail
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      // 9. REST fetchTaskInfo (fresh signed URLs)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          desc: '<p>Fresh description</p><p><img src="https://ones.test/fresh-signed-img.png" /></p>',
+          desc_rich: '<p>Fresh rich</p><p><img src="https://ones.test/fresh-signed-img.png" /></p>',
+        }),
       })
 
       const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
 
       expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
       expect(result.name).toContain('登录页面')
-      expect(result.descriptionRich).toContain('<img')
+      // Should use fresh URLs from REST API, not stale GraphQL ones
+      expect(result.descriptionRich).toContain('fresh-signed-img.png')
+      expect(result.description).toContain('Fresh description')
       expect(result.descriptionText).toContain('页面崩溃')
       expect(result.issueTypeName).toBe('缺陷')
       expect(result.statusCategory).toBe('to_do')
       expect(result.solverName).toBe('当前用户')
+    })
+
+    it('should fallback to GraphQL description when REST API fails', async () => {
+      mockLoginFlow()
+      // 8. GraphQL issue detail
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      // 9. REST fetchTaskInfo fails
+      mockFetch.mockResolvedValueOnce({ ok: false })
+
+      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+
+      // Falls back to GraphQL description
+      expect(result.descriptionRich).toContain('<img')
+      expect(result.descriptionText).toContain('页面崩溃')
     })
 
     it('should resolve issue by number (e.g. "98086" or "#98086")', async () => {
@@ -296,11 +324,58 @@ describe('onesAdapter', () => {
         ok: true,
         json: () => Promise.resolve(onesFixture.issueDetail),
       })
+      // 10. REST fetchTaskInfo
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ desc: '<p>Fresh</p>', desc_rich: '<p>Fresh</p>' }),
+      })
 
       const result = await adapter.getIssueDetail({ issueId: '98086' })
 
       expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
       expect(result.name).toContain('登录页面')
+    })
+
+    it('should refresh image URLs via attachment API when data-uuid present', async () => {
+      mockLoginFlow()
+      // 8. GraphQL issue detail
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      // 9. REST fetchTaskInfo with data-uuid img tags
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          desc: '<p>Bug desc</p><p><img data-uuid="res-uuid-1" src="https://ones.test/stale-url.png" /></p>',
+          desc_rich: '<p>Bug desc</p><p><img data-uuid="res-uuid-1" src="https://ones.test/stale-url.png" /></p><p><img data-uuid="res-uuid-2" src="https://ones.test/stale-url2.png" /></p>',
+        }),
+      })
+      // 10. getAttachmentUrl for res-uuid-1 in desc (302 redirect)
+      mockFetch.mockResolvedValueOnce({
+        status: 302,
+        headers: new Headers({ location: 'https://cdn.ones.test/fresh-img1.png?X-Amz-Signature=new1' }),
+      })
+      // 11. getAttachmentUrl for res-uuid-1 in desc_rich (302 redirect)
+      mockFetch.mockResolvedValueOnce({
+        status: 302,
+        headers: new Headers({ location: 'https://cdn.ones.test/fresh-img1.png?X-Amz-Signature=new1' }),
+      })
+      // 12. getAttachmentUrl for res-uuid-2 in desc_rich (302 redirect)
+      mockFetch.mockResolvedValueOnce({
+        status: 302,
+        headers: new Headers({ location: 'https://cdn.ones.test/fresh-img2.png?X-Amz-Signature=new2' }),
+      })
+
+      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+
+      // Stale URLs should be replaced with fresh ones
+      expect(result.description).toContain('fresh-img1.png')
+      expect(result.description).not.toContain('stale-url.png')
+      expect(result.descriptionRich).toContain('fresh-img1.png')
+      expect(result.descriptionRich).toContain('fresh-img2.png')
+      expect(result.descriptionRich).not.toContain('stale-url.png')
+      expect(result.descriptionRich).not.toContain('stale-url2.png')
     })
 
     it('should throw if issue not found', async () => {
