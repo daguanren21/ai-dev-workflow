@@ -9,6 +9,35 @@ export const GetIssueDetailSchema = z.object({
 
 export type GetIssueDetailInput = z.infer<typeof GetIssueDetailSchema>
 
+/**
+ * Download an image from URL and return as base64 data URI.
+ * Returns null if download fails.
+ */
+async function downloadImageAsBase64(url: string): Promise<{ base64: string, mimeType: string } | null> {
+  try {
+    const res = await fetch(url, { redirect: 'follow' })
+    if (!res.ok)
+      return null
+
+    const contentType = res.headers.get('content-type') ?? 'image/png'
+    const mimeType = contentType.split(';')[0].trim()
+    const buffer = Buffer.from(await res.arrayBuffer())
+    return { base64: buffer.toString('base64'), mimeType }
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * Extract image URLs from HTML string.
+ */
+function extractImageUrls(html: string): string[] {
+  const imgRegex = /<img[^>]+src="([^"]+)"[^>]*>/g
+  return Array.from(html.matchAll(imgRegex), m => m[1])
+    .map(url => url.replace(/&amp;/g, '&'))
+}
+
 export async function handleGetIssueDetail(
   input: GetIssueDetailInput,
   adapters: Map<string, BaseAdapter>,
@@ -28,9 +57,27 @@ export async function handleGetIssueDetail(
 
   const detail = await adapter.getIssueDetail({ issueId: input.issueId })
 
-  return {
-    content: [{ type: 'text' as const, text: formatIssueDetail(detail) }],
+  // Extract and download images from description
+  const imageUrls = detail.descriptionRich ? extractImageUrls(detail.descriptionRich) : []
+  const imageResults = await Promise.all(imageUrls.map(url => downloadImageAsBase64(url)))
+
+  // Build MCP content: text first, then embedded images
+  const content: Array<{ type: 'text', text: string } | { type: 'image', data: string, mimeType: string }> = [
+    { type: 'text' as const, text: formatIssueDetail(detail) },
+  ]
+
+  for (let i = 0; i < imageResults.length; i++) {
+    const img = imageResults[i]
+    if (img) {
+      content.push({
+        type: 'image' as const,
+        data: img.base64,
+        mimeType: img.mimeType,
+      })
+    }
   }
+
+  return { content }
 }
 
 function formatIssueDetail(detail: IssueDetail): string {
@@ -58,16 +105,6 @@ function formatIssueDetail(detail: IssueDetail): string {
   lines.push('', '## Description', '')
   if (detail.descriptionRich) {
     lines.push(detail.descriptionRich)
-
-    // Extract image URLs from rich text
-    const imgRegex = /<img[^>]+src="([^"]+)"[^>]*>/g
-    const images = Array.from(detail.descriptionRich.matchAll(imgRegex), m => m[1])
-    if (images.length > 0) {
-      lines.push('', '## Images', '')
-      for (const url of images) {
-        lines.push(`- ![image](${url})`)
-      }
-    }
   }
   else if (detail.descriptionText) {
     lines.push(detail.descriptionText)
