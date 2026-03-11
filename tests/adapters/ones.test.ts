@@ -255,22 +255,50 @@ describe('onesAdapter', () => {
   })
 
   describe('getIssueDetail', () => {
-    it('should fetch issue detail with description and rich text', async () => {
+    it('should fetch issue detail with fresh description from REST API', async () => {
       mockLoginFlow()
+      // 8. GraphQL issue detail
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      // 9. REST fetchTaskInfo (fresh signed URLs)
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          desc: '<p>Fresh description</p><p><img src="https://ones.test/fresh-signed-img.png" /></p>',
+          desc_rich: '<p>Fresh rich</p><p><img src="https://ones.test/fresh-signed-img.png" /></p>',
+        }),
       })
 
       const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
 
       expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
       expect(result.name).toContain('登录页面')
-      expect(result.descriptionRich).toContain('<img')
+      // Should use fresh URLs from REST API, not stale GraphQL ones
+      expect(result.descriptionRich).toContain('fresh-signed-img.png')
+      expect(result.description).toContain('Fresh description')
       expect(result.descriptionText).toContain('页面崩溃')
       expect(result.issueTypeName).toBe('缺陷')
       expect(result.statusCategory).toBe('to_do')
       expect(result.solverName).toBe('当前用户')
+    })
+
+    it('should fallback to GraphQL description when REST API fails', async () => {
+      mockLoginFlow()
+      // 8. GraphQL issue detail
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      // 9. REST fetchTaskInfo fails
+      mockFetch.mockResolvedValueOnce({ ok: false })
+
+      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+
+      // Falls back to GraphQL description
+      expect(result.descriptionRich).toContain('<img')
+      expect(result.descriptionText).toContain('页面崩溃')
     })
 
     it('should resolve issue by number (e.g. "98086" or "#98086")', async () => {
@@ -295,6 +323,11 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      // 10. REST fetchTaskInfo
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ desc: '<p>Fresh</p>', desc_rich: '<p>Fresh</p>' }),
       })
 
       const result = await adapter.getIssueDetail({ issueId: '98086' })

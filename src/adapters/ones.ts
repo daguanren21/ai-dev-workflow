@@ -794,12 +794,17 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Issue "${issueKey}" not found`)
     }
 
+    // Fetch fresh description via REST API (contains newly signed image URLs)
+    const taskInfo = await this.fetchTaskInfo(task.uuid)
+    const freshDescription = (taskInfo.desc as string) ?? task.description ?? ''
+    const freshDescRich = (taskInfo.desc_rich as string) ?? task.desc_rich ?? ''
+
     return {
       key: task.key,
       uuid: task.uuid,
       name: task.name,
-      description: task.description ?? '',
-      descriptionRich: task.desc_rich ?? '',
+      description: freshDescription,
+      descriptionRich: freshDescRich,
       descriptionText: task.descriptionText ?? '',
       issueTypeName: task.issueType?.name ?? 'Unknown',
       statusName: task.status?.name ?? 'Unknown',
