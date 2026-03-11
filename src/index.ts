@@ -6,6 +6,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createAdapter } from './adapters/index.js'
 import { loadConfig } from './config/loader.js'
+import { GetIssueDetailSchema, handleGetIssueDetail } from './tools/get-issue-detail.js'
+import { GetRelatedIssuesSchema, handleGetRelatedIssues } from './tools/get-related-issues.js'
 import { GetRequirementSchema, handleGetRequirement } from './tools/get-requirement.js'
 import { handleListSources } from './tools/list-sources.js'
 import { handleSearchRequirements, SearchRequirementsSchema } from './tools/search-requirements.js'
@@ -115,6 +117,40 @@ async function main() {
     async () => {
       try {
         return await handleListSources(adapters, config.config)
+      }
+      catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  server.tool(
+    'get_related_issues',
+    'Get pending defect issues (bugs) related to a requirement task. Returns all pending defects grouped by assignee (current user first).',
+    GetRelatedIssuesSchema.shape,
+    async (params) => {
+      try {
+        return await handleGetRelatedIssues(params, adapters, config.config.defaultSource)
+      }
+      catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  server.tool(
+    'get_issue_detail',
+    'Get detailed information about a specific issue/defect including description, rich text, and images',
+    GetIssueDetailSchema.shape,
+    async (params) => {
+      try {
+        return await handleGetIssueDetail(params, adapters, config.config.defaultSource)
       }
       catch (err) {
         return {

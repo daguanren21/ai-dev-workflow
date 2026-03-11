@@ -52,3 +52,37 @@ export interface SearchResult {
   page: number
   pageSize: number
 }
+
+export interface RelatedIssue {
+  key: string
+  uuid: string
+  name: string
+  issueTypeName: string
+  statusName: string
+  statusCategory: string
+  assignName: string | null
+  assignUuid: string | null
+  priorityValue: string | null
+  projectName: string | null
+}
+
+export interface IssueDetail {
+  key: string
+  uuid: string
+  name: string
+  description: string
+  descriptionRich: string
+  descriptionText: string
+  issueTypeName: string
+  statusName: string
+  statusCategory: string
+  assignName: string | null
+  ownerName: string | null
+  solverName: string | null
+  priorityValue: string | null
+  severityLevel: string | null
+  projectName: string | null
+  deadline: string | null
+  sprintName: string | null
+  raw: Record<string, unknown>
+}

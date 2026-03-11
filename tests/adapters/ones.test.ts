@@ -35,7 +35,7 @@ function mockLoginFlow() {
       org_users: [{
         region_uuid: 'region-1',
         org_uuid: 'org-1',
-        org_user: { org_user_uuid: 'org-user-1', name: 'Test User' },
+        org_user: { org_user_uuid: 'current-user-uuid', name: 'Test User' },
         org: { org_uuid: 'org-1', name: 'Test Org' },
       }],
     }),
@@ -127,6 +127,7 @@ describe('onesAdapter', () => {
 
       expect(result.description).toContain('Related Tasks')
       expect(result.description).toContain('#95946 前端页面开发')
+      expect(result.description).toContain('李四')
     })
 
     it('should throw if task not found', async () => {
@@ -200,6 +201,118 @@ describe('onesAdapter', () => {
 
       expect(result.items).toHaveLength(2)
       expect(result.total).toBe(2)
+    })
+  })
+
+  describe('getRelatedIssues', () => {
+    it('should return all pending defects (detailType=3 + to_do), current user first', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.relatedIssues),
+      })
+
+      const result = await adapter.getRelatedIssues({ taskId: 'HRL2p8rTX4mQ9xMv' })
+
+      // 2 pending defects: bug-001 (current user) and bug-004 (other user)
+      expect(result).toHaveLength(2)
+      // Current user's defect first
+      expect(result[0].key).toBe('task-bug-001')
+      expect(result[0].name).toBe('登录页面崩溃')
+      expect(result[0].assignUuid).toBe('current-user-uuid')
+      // Other user's defect second
+      expect(result[1].key).toBe('task-bug-004')
+      expect(result[1].name).toBe('表单提交失败')
+      expect(result[1].assignUuid).toBe('other-user-uuid')
+    })
+
+    it('should exclude non-defects and non-todo defects', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.relatedIssues),
+      })
+
+      const result = await adapter.getRelatedIssues({ taskId: 'HRL2p8rTX4mQ9xMv' })
+
+      const uuids = result.map(r => r.uuid)
+      expect(uuids).not.toContain('bug-uuid-002') // done, not to_do
+      expect(uuids).not.toContain('feat-uuid-003') // not a defect
+    })
+
+    it('should return empty array when no matching defects', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: { task: { key: 'task-xxx', relatedTasks: [] } },
+        }),
+      })
+
+      const result = await adapter.getRelatedIssues({ taskId: 'xxx' })
+      expect(result).toHaveLength(0)
+    })
+  })
+
+  describe('getIssueDetail', () => {
+    it('should fetch issue detail with description and rich text', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+
+      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+
+      expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
+      expect(result.name).toContain('登录页面')
+      expect(result.descriptionRich).toContain('<img')
+      expect(result.descriptionText).toContain('页面崩溃')
+      expect(result.issueTypeName).toBe('缺陷')
+      expect(result.statusCategory).toBe('to_do')
+      expect(result.solverName).toBe('当前用户')
+    })
+
+    it('should resolve issue by number (e.g. "98086" or "#98086")', async () => {
+      mockLoginFlow()
+      // 8. search by number
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            buckets: [{
+              key: 'default',
+              tasks: [{
+                uuid: 'bug-uuid-001',
+                number: 98086,
+                name: '登录页面崩溃',
+              }],
+            }],
+          },
+        }),
+      })
+      // 9. issue detail
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+
+      const result = await adapter.getIssueDetail({ issueId: '98086' })
+
+      expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
+      expect(result.name).toContain('登录页面')
+    })
+
+    it('should throw if issue not found', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { task: null } }),
+      })
+
+      await expect(adapter.getIssueDetail({ issueId: 'nonexistent' }))
+        .rejects
+        .toThrow('not found')
     })
   })
 })

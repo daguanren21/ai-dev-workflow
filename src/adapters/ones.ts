@@ -1,7 +1,7 @@
 import type { SourceConfig } from '../types/config.js'
-import type { Requirement, SearchResult, SourceType } from '../types/requirement.js'
+import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType } from '../types/requirement.js'
 
-import type { GetRequirementParams, SearchRequirementsParams } from './base.js'
+import type { GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, SearchRequirementsParams } from './base.js'
 import crypto from 'node:crypto'
 import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
 import { BaseAdapter } from './base.js'
@@ -64,6 +64,7 @@ interface OnesSession {
   accessToken: string
   teamUuid: string
   orgUuid: string
+  userUuid: string
   expiresAt: number
 }
 
@@ -116,6 +117,62 @@ const SEARCH_TASKS_QUERY = `
 
 // Query to find a task by its number
 const TASK_BY_NUMBER_QUERY = SEARCH_TASKS_QUERY
+const RELATED_TASKS_QUERY = `
+  query Task($key: Key) {
+    task(key: $key) {
+      key
+      relatedTasks {
+        key
+        uuid
+        name
+        path
+        deadline
+        project { uuid name }
+        priority { value }
+        issueType {
+          key uuid name detailType
+        }
+        subIssueType {
+          key uuid name detailType
+        }
+        status {
+          uuid name category
+        }
+        assign {
+          uuid name
+        }
+        sprint {
+          name uuid
+        }
+        statusCategory
+      }
+    }
+  }
+`
+
+const ISSUE_DETAIL_QUERY = `
+  query Task($key: Key) {
+    task(key: $key) {
+      key uuid
+      description
+      descriptionText
+      desc_rich: description
+      name
+      issueType { key uuid name detailType }
+      subIssueType { key uuid name detailType }
+      status { uuid name category }
+      priority { value }
+      assign { uuid name }
+      owner { uuid name }
+      solver { uuid name }
+      project { uuid name }
+      severityLevel { value }
+      deadline(unit: ONESDATE)
+      sprint { name uuid }
+    }
+  }
+`
+
 const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
 
 // ============ Helpers ============
@@ -361,6 +418,7 @@ export class OnesAdapter extends BaseAdapter {
       accessToken: token.access_token,
       teamUuid,
       orgUuid: orgUser.org_uuid,
+      userUuid: orgUser.org_user.org_user_uuid,
       expiresAt: Date.now() + (token.expires_in - 60) * 1000, // refresh 60s early
     }
 
@@ -511,7 +569,8 @@ export class OnesAdapter extends BaseAdapter {
       parts.push('')
       parts.push('## Related Tasks')
       for (const related of task.relatedTasks) {
-        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name})`)
+        const assignee = related.assign?.name ?? 'Unassigned'
+        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${assignee}`)
       }
     }
 
@@ -609,6 +668,151 @@ export class OnesAdapter extends BaseAdapter {
       total,
       page,
       pageSize,
+    }
+  }
+
+  async getRelatedIssues(params: GetRelatedIssuesParams): Promise<RelatedIssue[]> {
+    const session = await this.login()
+
+    const taskKey = params.taskId.startsWith('task-')
+      ? params.taskId
+      : `task-${params.taskId}`
+
+    const data = await this.graphql<{
+      data?: {
+        task?: {
+          key: string
+          relatedTasks: Array<{
+            key: string
+            uuid: string
+            name: string
+            issueType: { key: string, uuid: string, name: string, detailType: number }
+            subIssueType?: { key: string, uuid: string, name: string, detailType: number } | null
+            status: { uuid: string, name: string, category: string }
+            assign?: { uuid: string, name: string } | null
+            priority?: { value: string } | null
+            project?: { uuid: string, name: string } | null
+          }>
+        }
+      }
+    }>(RELATED_TASKS_QUERY, { key: taskKey }, 'Task')
+
+    const relatedTasks = data.data?.task?.relatedTasks ?? []
+
+    // Filter: detailType === 3 (defect) + status.category === "to_do" (pending)
+    // Returns ALL pending defects, not just current user's
+    const filtered = relatedTasks.filter((t) => {
+      const isDefect = t.issueType?.detailType === 3
+        || t.subIssueType?.detailType === 3
+      const isTodo = t.status?.category === 'to_do'
+      return isDefect && isTodo
+    })
+
+    // Sort: current user's defects first
+    const currentUserUuid = session.userUuid
+    filtered.sort((a, b) => {
+      const aIsCurrent = a.assign?.uuid === currentUserUuid ? 0 : 1
+      const bIsCurrent = b.assign?.uuid === currentUserUuid ? 0 : 1
+      return aIsCurrent - bIsCurrent
+    })
+
+    return filtered.map(t => ({
+      key: t.key,
+      uuid: t.uuid,
+      name: t.name,
+      issueTypeName: t.issueType?.name ?? 'Unknown',
+      statusName: t.status?.name ?? 'Unknown',
+      statusCategory: t.status?.category ?? 'unknown',
+      assignName: t.assign?.name ?? null,
+      assignUuid: t.assign?.uuid ?? null,
+      priorityValue: t.priority?.value ?? null,
+      projectName: t.project?.name ?? null,
+    }))
+  }
+
+  async getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail> {
+    let issueKey: string
+
+    // Support number lookup (e.g. "98086" or "#98086")
+    const numMatch = params.issueId.match(/^#?(\d+)$/)
+    if (numMatch) {
+      const taskNumber = Number.parseInt(numMatch[1], 10)
+      const searchData = await this.graphql<{
+        data?: { buckets?: Array<{ tasks?: Array<{ uuid: string, number: number }> }> }
+      }>(
+        SEARCH_TASKS_QUERY,
+        {
+          groupBy: { tasks: {} },
+          groupOrderBy: null,
+          orderBy: { createTime: 'DESC' },
+          filterGroup: [{ number_in: [taskNumber] }],
+          search: null,
+          pagination: { limit: 10, preciseCount: false },
+          limit: 10,
+        },
+        'group-task-data',
+      )
+
+      const allTasks = searchData.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
+      const found = allTasks.find(t => t.number === taskNumber)
+      if (!found) {
+        throw new Error(`ONES: Issue #${taskNumber} not found in current team`)
+      }
+      issueKey = `task-${found.uuid}`
+    }
+    else {
+      issueKey = params.issueId.startsWith('task-')
+        ? params.issueId
+        : `task-${params.issueId}`
+    }
+
+    const data = await this.graphql<{
+      data?: {
+        task?: {
+          key: string
+          uuid: string
+          name: string
+          description: string
+          descriptionText: string
+          desc_rich: string
+          issueType: { name: string }
+          status: { name: string, category: string }
+          priority?: { value: string } | null
+          assign?: { uuid: string, name: string } | null
+          owner?: { uuid: string, name: string } | null
+          solver?: { uuid: string, name: string } | null
+          project?: { uuid: string, name: string } | null
+          severityLevel?: { value: string } | null
+          deadline?: string | null
+          sprint?: { name: string } | null
+        }
+      }
+    }>(ISSUE_DETAIL_QUERY, { key: issueKey }, 'Task')
+
+    const task = data.data?.task
+    if (!task) {
+      throw new Error(`ONES: Issue "${issueKey}" not found`)
+    }
+
+    return {
+      key: task.key,
+      uuid: task.uuid,
+      name: task.name,
+      description: task.description ?? '',
+      descriptionRich: task.desc_rich ?? '',
+      descriptionText: task.descriptionText ?? '',
+      issueTypeName: task.issueType?.name ?? 'Unknown',
+      statusName: task.status?.name ?? 'Unknown',
+      statusCategory: task.status?.category ?? 'unknown',
+      assignName: task.assign?.name ?? null,
+      ownerName: task.owner?.name ?? null,
+      solverName: task.solver?.name ?? null,
+      priorityValue: task.priority?.value ?? null,
+      severityLevel: task.severityLevel?.value ?? null,
+      projectName: task.project?.name ?? null,
+      deadline: task.deadline ?? null,
+      sprintName: task.sprint?.name ?? null,
+      raw: task as unknown as Record<string, unknown>,
     }
   }
 }

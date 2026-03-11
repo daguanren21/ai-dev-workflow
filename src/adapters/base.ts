@@ -1,5 +1,5 @@
 import type { SourceConfig } from '../types/config.js'
-import type { Requirement, SearchResult, SourceType } from '../types/requirement.js'
+import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType } from '../types/requirement.js'
 
 export interface GetRequirementParams {
   id: string
@@ -9,6 +9,14 @@ export interface SearchRequirementsParams {
   query: string
   page?: number
   pageSize?: number
+}
+
+export interface GetRelatedIssuesParams {
+  taskId: string
+}
+
+export interface GetIssueDetailParams {
+  issueId: string
 }
 
 /**
@@ -39,4 +47,8 @@ export abstract class BaseAdapter {
    * Search requirements by query string.
    */
   abstract searchRequirements(params: SearchRequirementsParams): Promise<SearchResult>
+
+  abstract getRelatedIssues(params: GetRelatedIssuesParams): Promise<RelatedIssue[]>
+
+  abstract getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail>
 }
