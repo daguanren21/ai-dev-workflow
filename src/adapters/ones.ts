@@ -1,7 +1,7 @@
 import type { SourceConfig } from '../types/config.js'
-import type { Requirement, SearchResult, SourceType } from '../types/requirement.js'
+import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType } from '../types/requirement.js'
 
-import type { GetRequirementParams, SearchRequirementsParams } from './base.js'
+import type { GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, SearchRequirementsParams } from './base.js'
 import crypto from 'node:crypto'
 import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
 import { BaseAdapter } from './base.js'
@@ -64,6 +64,7 @@ interface OnesSession {
   accessToken: string
   teamUuid: string
   orgUuid: string
+  userUuid: string
   expiresAt: number
 }
 
@@ -116,6 +117,39 @@ const SEARCH_TASKS_QUERY = `
 
 // Query to find a task by its number
 const TASK_BY_NUMBER_QUERY = SEARCH_TASKS_QUERY
+const RELATED_TASKS_QUERY = `
+  query Task($key: Key) {
+    task(key: $key) {
+      key
+      relatedTasks {
+        key
+        uuid
+        name
+        path
+        deadline
+        project { uuid name }
+        priority { value }
+        issueType {
+          key uuid name detailType
+        }
+        subIssueType {
+          key uuid name detailType
+        }
+        status {
+          uuid name category
+        }
+        assign {
+          uuid name
+        }
+        sprint {
+          name uuid
+        }
+        statusCategory
+      }
+    }
+  }
+`
+
 const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
 
 // ============ Helpers ============
@@ -361,6 +395,7 @@ export class OnesAdapter extends BaseAdapter {
       accessToken: token.access_token,
       teamUuid,
       orgUuid: orgUser.org_uuid,
+      userUuid: orgUser.org_user.org_user_uuid,
       expiresAt: Date.now() + (token.expires_in - 60) * 1000, // refresh 60s early
     }
 
@@ -610,5 +645,68 @@ export class OnesAdapter extends BaseAdapter {
       page,
       pageSize,
     }
+  }
+
+  async getRelatedIssues(params: GetRelatedIssuesParams): Promise<RelatedIssue[]> {
+    const session = await this.login()
+
+    const taskKey = params.taskId.startsWith('task-')
+      ? params.taskId
+      : `task-${params.taskId}`
+
+    const data = await this.graphql<{
+      data?: {
+        task?: {
+          key: string
+          relatedTasks: Array<{
+            key: string
+            uuid: string
+            name: string
+            issueType: { key: string, uuid: string, name: string, detailType: number }
+            subIssueType?: { key: string, uuid: string, name: string, detailType: number } | null
+            status: { uuid: string, name: string, category: string }
+            assign?: { uuid: string, name: string } | null
+            priority?: { value: string } | null
+            project?: { uuid: string, name: string } | null
+          }>
+        }
+      }
+    }>(RELATED_TASKS_QUERY, { key: taskKey }, 'Task')
+
+    const relatedTasks = data.data?.task?.relatedTasks ?? []
+
+    // Filter: detailType === 3 (defect) + status.category === "to_do" (pending)
+    // Returns ALL pending defects, not just current user's
+    const filtered = relatedTasks.filter((t) => {
+      const isDefect = t.issueType?.detailType === 3
+        || t.subIssueType?.detailType === 3
+      const isTodo = t.status?.category === 'to_do'
+      return isDefect && isTodo
+    })
+
+    // Sort: current user's defects first
+    const currentUserUuid = session.userUuid
+    filtered.sort((a, b) => {
+      const aIsCurrent = a.assign?.uuid === currentUserUuid ? 0 : 1
+      const bIsCurrent = b.assign?.uuid === currentUserUuid ? 0 : 1
+      return aIsCurrent - bIsCurrent
+    })
+
+    return filtered.map(t => ({
+      key: t.key,
+      uuid: t.uuid,
+      name: t.name,
+      issueTypeName: t.issueType?.name ?? 'Unknown',
+      statusName: t.status?.name ?? 'Unknown',
+      statusCategory: t.status?.category ?? 'unknown',
+      assignName: t.assign?.name ?? null,
+      assignUuid: t.assign?.uuid ?? null,
+      priorityValue: t.priority?.value ?? null,
+      projectName: t.project?.name ?? null,
+    }))
+  }
+
+  async getIssueDetail(_params: GetIssueDetailParams): Promise<IssueDetail> {
+    throw new Error('Not implemented yet')
   }
 }

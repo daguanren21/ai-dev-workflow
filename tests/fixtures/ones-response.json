@@ -55,5 +55,54 @@
         }
       ]
     }
+  },
+  "relatedIssues": {
+    "data": {
+      "task": {
+        "key": "task-HRL2p8rTX4mQ9xMv",
+        "relatedTasks": [
+          {
+            "key": "task-bug-001",
+            "uuid": "bug-uuid-001",
+            "name": "登录页面崩溃",
+            "issueType": { "key": "it-1", "uuid": "it-uuid-1", "name": "缺陷", "detailType": 3 },
+            "status": { "uuid": "s-todo", "name": "待处理", "category": "to_do" },
+            "assign": { "uuid": "current-user-uuid", "name": "当前用户" },
+            "priority": { "value": "high" },
+            "project": { "uuid": "p1", "name": "StarCloud" }
+          },
+          {
+            "key": "task-bug-002",
+            "uuid": "bug-uuid-002",
+            "name": "数量为零时崩溃",
+            "issueType": { "key": "it-2", "uuid": "it-uuid-2", "name": "缺陷", "detailType": 3 },
+            "status": { "uuid": "s-done", "name": "已完成", "category": "done" },
+            "assign": { "uuid": "current-user-uuid", "name": "当前用户" },
+            "priority": { "value": "normal" },
+            "project": { "uuid": "p1", "name": "StarCloud" }
+          },
+          {
+            "key": "task-feat-003",
+            "uuid": "feat-uuid-003",
+            "name": "新增导出功能",
+            "issueType": { "key": "it-3", "uuid": "it-uuid-3", "name": "需求", "detailType": 1 },
+            "status": { "uuid": "s-todo2", "name": "待处理", "category": "to_do" },
+            "assign": { "uuid": "other-user-uuid", "name": "其他人" },
+            "priority": { "value": "normal" },
+            "project": { "uuid": "p1", "name": "StarCloud" }
+          },
+          {
+            "key": "task-bug-004",
+            "uuid": "bug-uuid-004",
+            "name": "表单提交失败",
+            "issueType": { "key": "it-4", "uuid": "it-uuid-4", "name": "缺陷", "detailType": 3 },
+            "status": { "uuid": "s-todo3", "name": "待处理", "category": "to_do" },
+            "assign": { "uuid": "other-user-uuid", "name": "其他人" },
+            "priority": { "value": "high" },
+            "project": { "uuid": "p1", "name": "StarCloud" }
+          }
+        ]
+      }
+    }
   }
 }

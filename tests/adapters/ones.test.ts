@@ -35,7 +35,7 @@ function mockLoginFlow() {
       org_users: [{
         region_uuid: 'region-1',
         org_uuid: 'org-1',
-        org_user: { org_user_uuid: 'org-user-1', name: 'Test User' },
+        org_user: { org_user_uuid: 'current-user-uuid', name: 'Test User' },
         org: { org_uuid: 'org-1', name: 'Test Org' },
       }],
     }),
@@ -200,6 +200,56 @@ describe('onesAdapter', () => {
 
       expect(result.items).toHaveLength(2)
       expect(result.total).toBe(2)
+    })
+  })
+
+  describe('getRelatedIssues', () => {
+    it('should return all pending defects (detailType=3 + to_do), current user first', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.relatedIssues),
+      })
+
+      const result = await adapter.getRelatedIssues({ taskId: 'HRL2p8rTX4mQ9xMv' })
+
+      // 2 pending defects: bug-001 (current user) and bug-004 (other user)
+      expect(result).toHaveLength(2)
+      // Current user's defect first
+      expect(result[0].key).toBe('task-bug-001')
+      expect(result[0].name).toBe('登录页面崩溃')
+      expect(result[0].assignUuid).toBe('current-user-uuid')
+      // Other user's defect second
+      expect(result[1].key).toBe('task-bug-004')
+      expect(result[1].name).toBe('表单提交失败')
+      expect(result[1].assignUuid).toBe('other-user-uuid')
+    })
+
+    it('should exclude non-defects and non-todo defects', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.relatedIssues),
+      })
+
+      const result = await adapter.getRelatedIssues({ taskId: 'HRL2p8rTX4mQ9xMv' })
+
+      const uuids = result.map(r => r.uuid)
+      expect(uuids).not.toContain('bug-uuid-002') // done, not to_do
+      expect(uuids).not.toContain('feat-uuid-003') // not a defect
+    })
+
+    it('should return empty array when no matching defects', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: { task: { key: 'task-xxx', relatedTasks: [] } },
+        }),
+      })
+
+      const result = await adapter.getRelatedIssues({ taskId: 'xxx' })
+      expect(result).toHaveLength(0)
     })
   })
 })
