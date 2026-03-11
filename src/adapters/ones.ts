@@ -730,9 +730,40 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   async getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail> {
-    const issueKey = params.issueId.startsWith('task-')
-      ? params.issueId
-      : `task-${params.issueId}`
+    let issueKey: string
+
+    // Support number lookup (e.g. "98086" or "#98086")
+    const numMatch = params.issueId.match(/^#?(\d+)$/)
+    if (numMatch) {
+      const taskNumber = Number.parseInt(numMatch[1], 10)
+      const searchData = await this.graphql<{
+        data?: { buckets?: Array<{ tasks?: Array<{ uuid: string, number: number }> }> }
+      }>(
+        SEARCH_TASKS_QUERY,
+        {
+          groupBy: { tasks: {} },
+          groupOrderBy: null,
+          orderBy: { createTime: 'DESC' },
+          filterGroup: [{ number_in: [taskNumber] }],
+          search: null,
+          pagination: { limit: 10, preciseCount: false },
+          limit: 10,
+        },
+        'group-task-data',
+      )
+
+      const allTasks = searchData.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
+      const found = allTasks.find(t => t.number === taskNumber)
+      if (!found) {
+        throw new Error(`ONES: Issue #${taskNumber} not found in current team`)
+      }
+      issueKey = `task-${found.uuid}`
+    }
+    else {
+      issueKey = params.issueId.startsWith('task-')
+        ? params.issueId
+        : `task-${params.issueId}`
+    }
 
     const data = await this.graphql<{
       data?: {

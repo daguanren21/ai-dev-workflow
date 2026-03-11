@@ -272,6 +272,36 @@ describe('onesAdapter', () => {
       expect(result.solverName).toBe('当前用户')
     })
 
+    it('should resolve issue by number (e.g. "98086" or "#98086")', async () => {
+      mockLoginFlow()
+      // 8. search by number
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            buckets: [{
+              key: 'default',
+              tasks: [{
+                uuid: 'bug-uuid-001',
+                number: 98086,
+                name: '登录页面崩溃',
+              }],
+            }],
+          },
+        }),
+      })
+      // 9. issue detail
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+
+      const result = await adapter.getIssueDetail({ issueId: '98086' })
+
+      expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
+      expect(result.name).toContain('登录页面')
+    })
+
     it('should throw if issue not found', async () => {
       mockLoginFlow()
       mockFetch.mockResolvedValueOnce({
