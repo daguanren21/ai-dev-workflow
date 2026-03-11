@@ -127,6 +127,7 @@ describe('onesAdapter', () => {
 
       expect(result.description).toContain('Related Tasks')
       expect(result.description).toContain('#95946 前端页面开发')
+      expect(result.description).toContain('李四')
     })
 
     it('should throw if task not found', async () => {

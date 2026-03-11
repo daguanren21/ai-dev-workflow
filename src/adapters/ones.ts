@@ -569,7 +569,8 @@ export class OnesAdapter extends BaseAdapter {
       parts.push('')
       parts.push('## Related Tasks')
       for (const related of task.relatedTasks) {
-        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name})`)
+        const assignee = related.assign?.name ?? 'Unassigned'
+        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${assignee}`)
       }
     }
 
