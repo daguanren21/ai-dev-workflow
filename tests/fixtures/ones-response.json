@@ -104,5 +104,28 @@
         ]
       }
     }
+  },
+  "issueDetail": {
+    "data": {
+      "task": {
+        "key": "task-6W9vW3y8J9DO66Pu",
+        "uuid": "bug-uuid-001",
+        "name": "登录页面崩溃",
+        "description": "<p>用户在登录页面输入正确密码后点击登录，页面崩溃。</p><p><img src=\"https://ones.test/attachment/img1.png\" /></p>",
+        "descriptionText": "用户在登录页面输入正确密码后点击登录，页面崩溃。",
+        "desc_rich": "<p>用户在登录页面输入正确密码后点击登录，页面崩溃。</p><p><img src=\"https://ones.test/attachment/img1.png\" /></p>",
+        "issueType": { "key": "it-1", "uuid": "it-uuid-1", "name": "缺陷", "detailType": 3 },
+        "subIssueType": null,
+        "status": { "uuid": "s-todo", "name": "待处理", "category": "to_do" },
+        "priority": { "value": "high" },
+        "assign": { "uuid": "current-user-uuid", "name": "当前用户" },
+        "owner": { "uuid": "owner-uuid", "name": "产品经理" },
+        "solver": { "uuid": "current-user-uuid", "name": "当前用户" },
+        "project": { "uuid": "p1", "name": "StarCloud" },
+        "severityLevel": { "value": "严重" },
+        "deadline": "2026-03-20",
+        "sprint": { "name": "Sprint 12", "uuid": "sprint-uuid-1" }
+      }
+    }
   }
 }

@@ -150,6 +150,29 @@ const RELATED_TASKS_QUERY = `
   }
 `
 
+const ISSUE_DETAIL_QUERY = `
+  query Task($key: Key) {
+    task(key: $key) {
+      key uuid
+      description
+      descriptionText
+      desc_rich: description
+      name
+      issueType { key uuid name detailType }
+      subIssueType { key uuid name detailType }
+      status { uuid name category }
+      priority { value }
+      assign { uuid name }
+      owner { uuid name }
+      solver { uuid name }
+      project { uuid name }
+      severityLevel { value }
+      deadline(unit: ONESDATE)
+      sprint { name uuid }
+    }
+  }
+`
+
 const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
 
 // ============ Helpers ============
@@ -706,7 +729,58 @@ export class OnesAdapter extends BaseAdapter {
     }))
   }
 
-  async getIssueDetail(_params: GetIssueDetailParams): Promise<IssueDetail> {
-    throw new Error('Not implemented yet')
+  async getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail> {
+    const issueKey = params.issueId.startsWith('task-')
+      ? params.issueId
+      : `task-${params.issueId}`
+
+    const data = await this.graphql<{
+      data?: {
+        task?: {
+          key: string
+          uuid: string
+          name: string
+          description: string
+          descriptionText: string
+          desc_rich: string
+          issueType: { name: string }
+          status: { name: string, category: string }
+          priority?: { value: string } | null
+          assign?: { uuid: string, name: string } | null
+          owner?: { uuid: string, name: string } | null
+          solver?: { uuid: string, name: string } | null
+          project?: { uuid: string, name: string } | null
+          severityLevel?: { value: string } | null
+          deadline?: string | null
+          sprint?: { name: string } | null
+        }
+      }
+    }>(ISSUE_DETAIL_QUERY, { key: issueKey }, 'Task')
+
+    const task = data.data?.task
+    if (!task) {
+      throw new Error(`ONES: Issue "${issueKey}" not found`)
+    }
+
+    return {
+      key: task.key,
+      uuid: task.uuid,
+      name: task.name,
+      description: task.description ?? '',
+      descriptionRich: task.desc_rich ?? '',
+      descriptionText: task.descriptionText ?? '',
+      issueTypeName: task.issueType?.name ?? 'Unknown',
+      statusName: task.status?.name ?? 'Unknown',
+      statusCategory: task.status?.category ?? 'unknown',
+      assignName: task.assign?.name ?? null,
+      ownerName: task.owner?.name ?? null,
+      solverName: task.solver?.name ?? null,
+      priorityValue: task.priority?.value ?? null,
+      severityLevel: task.severityLevel?.value ?? null,
+      projectName: task.project?.name ?? null,
+      deadline: task.deadline ?? null,
+      sprintName: task.sprint?.name ?? null,
+      raw: task as unknown as Record<string, unknown>,
+    }
   }
 }
