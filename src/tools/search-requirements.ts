@@ -10,6 +10,10 @@ export const SearchRequirementsSchema = z.object({
 
 export type SearchRequirementsInput = z.infer<typeof SearchRequirementsSchema>
 
+function formatStatusMarker(status: string): string {
+  return `[${status.toUpperCase()}]`
+}
+
 export async function handleSearchRequirements(
   input: SearchRequirementsInput,
   adapters: Map<string, BaseAdapter>,
@@ -34,20 +38,24 @@ export async function handleSearchRequirements(
   })
 
   const lines = [
-    `Found **${result.total}** results (page ${result.page}/${Math.ceil(result.total / result.pageSize) || 1}):`,
+    `Found **${result.total}** items (page ${result.page}/${Math.ceil(result.total / result.pageSize) || 1}):`,
     '',
   ]
 
+  if (/\u6211.*\u7F3A\u9677|bug|\u6211.*\u4EFB\u52A1/i.test(input.query)) {
+    lines.push(`Query: ${input.query}`)
+    lines.push('Use an item ID or number in the next step to fetch detail.')
+    lines.push('')
+  }
+
   for (const item of result.items) {
-    lines.push(`### ${item.id}: ${item.title}`)
+    lines.push(`### ${formatStatusMarker(item.status)} ${item.id}: ${item.title}`)
     lines.push(`- Status: ${item.status} | Priority: ${item.priority} | Type: ${item.type}`)
     lines.push(`- Assignee: ${item.assignee ?? 'Unassigned'}`)
-    if (item.description) {
-      const desc = item.description.length > 200
-        ? `${item.description.slice(0, 200)}...`
-        : item.description
-      lines.push(`- ${desc}`)
-    }
+    const desc = item.description
+      ? (item.description.length > 200 ? `${item.description.slice(0, 200)}...` : item.description)
+      : '(empty)'
+    lines.push(`- Content: ${desc}`)
     lines.push('')
   }
 

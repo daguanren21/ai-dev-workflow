@@ -15,7 +15,7 @@ interface OnesTaskNode {
   name: string
   status: { uuid: string, name: string, category?: string }
   priority?: { value: string }
-  issueType?: { uuid: string, name: string }
+  issueType?: { uuid: string, name: string, detailType?: number }
   assign?: { uuid: string, name: string } | null
   owner?: { uuid: string, name: string } | null
   project?: { uuid: string, name: string }
@@ -41,6 +41,31 @@ interface OnesRelatedTask {
   issueType: { uuid: string, name: string }
   status: { uuid: string, name: string, category?: string }
   assign?: { uuid: string, name: string } | null
+}
+
+interface OnesIssueTypeNode {
+  uuid: string
+  name: string
+  detailType: number
+}
+
+interface OnesTeamUserNode {
+  uuid?: string
+  name?: string
+  user?: {
+    uuid?: string
+    name?: string
+  }
+  org_user?: {
+    org_user_uuid?: string
+    name?: string
+  }
+  orgUser?: {
+    uuid?: string
+    name?: string
+  }
+  orgUserUuid?: string
+  org_user_uuid?: string
 }
 
 interface OnesTokenResponse {
@@ -105,12 +130,22 @@ const SEARCH_TASKS_QUERY = `
       key
       tasks(filterGroup: $filterGroup, orderBy: $orderBy, limit: $limit, includeAncestors: { pathField: "path" }) {
         key uuid number name
-        issueType { uuid name }
+        issueType { uuid name detailType }
         status { uuid name category }
         priority { value }
         assign { uuid name }
         project { uuid name }
       }
+    }
+  }
+`
+
+const ISSUE_TYPES_QUERY = `
+  query IssueTypes($orderBy: OrderBy) {
+    issueTypes(orderBy: $orderBy) {
+      uuid
+      name
+      detailType
     }
   }
 `
@@ -177,6 +212,161 @@ const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
 
 // ============ Helpers ============
 
+function _getTaskStatusPriority(task: Pick<OnesTaskNode, 'status'>): number {
+  const category = task.status?.category
+  const name = task.status?.name
+
+  if (category === 'to_do')
+    return 0
+
+  if (category === 'in_progress' && name === '修复中')
+    return 1
+
+  return Number.POSITIVE_INFINITY
+}
+
+function _isCommonTaskIssueType(task: Pick<OnesTaskNode, 'issueType'>): boolean {
+  const detailType = task.issueType?.detailType
+
+  if (detailType === 2 || detailType === 3)
+    return true
+
+  return task.issueType?.name === '任务' || task.issueType?.name === '缺陷'
+}
+
+type OnesSearchIntent = 'all_bugs' | 'all_tasks' | 'keyword'
+
+function parseOnesSearchIntent(query: string): OnesSearchIntent {
+  if (!query)
+    return 'keyword'
+
+  const normalized = query.toLowerCase()
+
+  if (query.includes('\u7F3A\u9677') || normalized.includes('bug'))
+    return 'all_bugs'
+
+  if (query.includes('\u4EFB\u52A1'))
+    return 'all_tasks'
+
+  return 'keyword'
+}
+
+function extractAssigneeName(query: string, intent: OnesSearchIntent): string | null {
+  if (intent === 'keyword')
+    return null
+
+  const trimmed = query.trim()
+  if (!trimmed)
+    return null
+
+  const ownerStyleMatch = trimmed.match(/\u8D1F\u8D23\u4EBA\u4E3A(.+?)\u7684?(?:\u7F3A\u9677|bug)$/i)
+  if (ownerStyleMatch?.[1]) {
+    return ownerStyleMatch[1].trim()
+  }
+
+  const genericMatch = trimmed.match(/^(查询)?(.+?)的(?:缺陷|bug|任务)$/i)
+  const candidate = genericMatch?.[2]?.trim()
+  if (!candidate || candidate.includes('我')) {
+    return null
+  }
+
+  return candidate
+}
+
+function extractNamedAssignee(query: string, intent: OnesSearchIntent): string | null {
+  if (intent === 'keyword')
+    return null
+
+  const compact = query.replace(/\s+/g, '').trim()
+  if (!compact)
+    return null
+
+  const ownerStyleMatch = compact.match(/(?:\u8D1F\u8D23\u4EBA\u4E3A|\u8D1F\u8D23\u4EBA\u662F|\u6307\u6D3E\u7ED9|\u5206\u914D\u7ED9)(.+?)\u7684?(?:\u7F3A\u9677|bug|\u4EFB\u52A1)$/i)
+  if (ownerStyleMatch?.[1]) {
+    return ownerStyleMatch[1].trim()
+  }
+
+  const genericMatch = compact.match(/^(?:\u67E5\u8BE2|\u67E5\u627E|\u641C\u7D22)?(.+?)\u7684?(?:\u7F3A\u9677|bug|\u4EFB\u52A1)$/i)
+  const candidate = genericMatch?.[1]?.trim()
+
+  if (
+    !candidate
+    || candidate.startsWith('\u6211')
+    || /^(?:\u6211|\u6211\u7684|\u6211\u6240\u6709|\u6211\u5168\u90E8|\u672C\u4EBA|\u5F53\u524D\u7528\u6237)$/.test(candidate)
+  ) {
+    return null
+  }
+
+  return candidate
+}
+
+function getBugStatusPriority(task: Pick<OnesTaskNode, 'status'>): number {
+  if (task.status?.category === 'to_do')
+    return 0
+
+  if (task.status?.category === 'in_progress')
+    return 1
+
+  return Number.POSITIVE_INFINITY
+}
+
+function isOpenOrInProgressBug(task: Pick<OnesTaskNode, 'status'>): boolean {
+  const category = task.status?.category
+  return category === 'to_do' || category === 'in_progress'
+}
+
+function extractTeamUsers(payload: unknown): Array<{ uuid: string, name: string }> {
+  const record = payload && typeof payload === 'object'
+    ? payload as Record<string, unknown>
+    : null
+
+  if (!record)
+    return []
+
+  const candidates = [
+    record.users,
+    record.items,
+    record.list,
+    record.results,
+    (record.data as Record<string, unknown> | undefined)?.users,
+    (record.data as Record<string, unknown> | undefined)?.items,
+    (record.data as Record<string, unknown> | undefined)?.list,
+    (record.data as Record<string, unknown> | undefined)?.results,
+  ]
+
+  const rawUsers = candidates.find(Array.isArray)
+  if (!rawUsers)
+    return []
+
+  return rawUsers
+    .map((item) => {
+      const user = item && typeof item === 'object'
+        ? item as OnesTeamUserNode
+        : null
+
+      if (!user)
+        return null
+
+      const uuid = user.uuid
+        ?? user.user?.uuid
+        ?? user.orgUser?.uuid
+        ?? user.orgUserUuid
+        ?? user.org_user_uuid
+        ?? user.org_user?.org_user_uuid
+
+      const name = user.name
+        ?? user.user?.name
+        ?? user.orgUser?.name
+        ?? user.org_user?.name
+
+      if (!uuid || !name)
+        return null
+
+      return { uuid, name }
+    })
+    .filter((item): item is { uuid: string, name: string } => item !== null)
+}
+
 function base64Url(buffer: Buffer): string {
   return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
@@ -215,6 +405,7 @@ function toRequirement(task: OnesTaskNode, description = ''): Requirement {
 
 export class OnesAdapter extends BaseAdapter {
   private session: OnesSession | null = null
+  private issueTypesCache: OnesIssueTypeNode[] | null = null
 
   constructor(
     sourceType: SourceType,
@@ -447,6 +638,61 @@ export class OnesAdapter extends BaseAdapter {
     }
 
     return response.json() as Promise<T>
+  }
+
+  private async fetchIssueTypes(): Promise<OnesIssueTypeNode[]> {
+    if (this.issueTypesCache)
+      return this.issueTypesCache
+
+    const data = await this.graphql<{ data?: { issueTypes?: OnesIssueTypeNode[] } }>(
+      ISSUE_TYPES_QUERY,
+      { orderBy: { namePinyin: 'ASC' } },
+      'issueTypes',
+    )
+
+    this.issueTypesCache = data.data?.issueTypes ?? []
+    return this.issueTypesCache
+  }
+
+  private async searchTeamUsers(keyword: string): Promise<Array<{ uuid: string, name: string }>> {
+    const session = await this.login()
+    const url = `${this.config.apiBase}/project/api/project/team/${session.teamUuid}/users/search`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        keyword,
+        status: [1],
+        team_member_status: [1, 4],
+        types: [1, 10],
+      }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(`ONES user search error: ${response.status} ${text}`)
+    }
+
+    return extractTeamUsers(await response.json())
+  }
+
+  private async resolveAssigneeUuid(name: string): Promise<string | null> {
+    const trimmed = name.trim()
+    if (!trimmed)
+      return null
+
+    const users = await this.searchTeamUsers(trimmed)
+    const exactMatch = users.find(user => user.name === trimmed)
+    if (exactMatch)
+      return exactMatch.uuid
+
+    const normalizedTarget = trimmed.toLowerCase()
+    const fuzzyMatch = users.find(user => user.name.toLowerCase().includes(normalizedTarget))
+    return fuzzyMatch?.uuid ?? null
   }
 
   /**
@@ -707,6 +953,46 @@ export class OnesAdapter extends BaseAdapter {
   async searchRequirements(params: SearchRequirementsParams): Promise<SearchResult> {
     const page = params.page ?? 1
     const pageSize = params.pageSize ?? 50
+    const intent = parseOnesSearchIntent(params.query)
+    const assigneeName = extractNamedAssignee(params.query, intent) ?? extractAssigneeName(params.query, intent)
+    const assigneeUuid = assigneeName
+      ? await this.resolveAssigneeUuid(assigneeName)
+      : null
+
+    if (assigneeName && !assigneeUuid) {
+      return {
+        items: [],
+        total: 0,
+        page,
+        pageSize,
+      }
+    }
+
+    let bugTypeUuids: string[] = []
+    let taskTypeUuids: string[] = []
+
+    if (intent === 'all_bugs' || intent === 'all_tasks') {
+      const issueTypes = await this.fetchIssueTypes()
+      bugTypeUuids = issueTypes.filter(item => item.detailType === 3).map(item => item.uuid)
+      taskTypeUuids = issueTypes.filter(item => item.detailType === 2).map(item => item.uuid)
+    }
+
+    const filter: Record<string, unknown> = {
+      status_notIn: DEFAULT_STATUS_NOT_IN,
+    }
+
+    if (assigneeName) {
+      filter.assign_in = [assigneeUuid]
+    }
+    else {
+      filter.assign_in = ['${currentUser}']
+    }
+
+    if (intent === 'all_bugs')
+      filter.issueType_in = bugTypeUuids
+
+    if (intent === 'all_tasks')
+      filter.issueType_in = taskTypeUuids
 
     const data = await this.graphql<{
       data?: {
@@ -721,12 +1007,7 @@ export class OnesAdapter extends BaseAdapter {
         groupBy: { tasks: {} },
         groupOrderBy: null,
         orderBy: { position: 'ASC', createTime: 'DESC' },
-        filterGroup: [
-          {
-            assign_in: ['${currentUser}'],
-            status_notIn: DEFAULT_STATUS_NOT_IN,
-          },
-        ],
+        filterGroup: [filter],
         search: null,
         pagination: { limit: pageSize * page, preciseCount: false },
         limit: 1000,
@@ -736,9 +1017,27 @@ export class OnesAdapter extends BaseAdapter {
 
     let tasks = data.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
 
+    if (intent === 'all_bugs') {
+      tasks = tasks
+        .filter(task => task.issueType?.uuid ? bugTypeUuids.includes(task.issueType.uuid) : false)
+        .filter(task => isOpenOrInProgressBug(task))
+        .sort((a, b) => getBugStatusPriority(a) - getBugStatusPriority(b))
+    }
+
+    if (intent === 'all_tasks') {
+      // detailType = 1 的需求不属于“我的任务”列表入口。
+      // 需求详情查询继续走 getRequirement(id/number)，因为需求通常由产品负责人维护，
+      // 当前登录用户不一定能通过 assign_in: ['${currentUser}'] 查到需求项。
+      tasks = tasks.filter(task => task.issueType?.uuid ? taskTypeUuids.includes(task.issueType.uuid) : false)
+    }
+
+    if (assigneeUuid) {
+      tasks = tasks.filter(task => task.assign?.uuid === assigneeUuid)
+    }
+
     // Local keyword filter (matching ones-api.ts behavior)
-    if (params.query) {
-      const keyword = params.query
+    if (intent === 'keyword' && params.query) {
+      const keyword = params.query.trim()
       const lower = keyword.toLowerCase()
       const numMatch = keyword.match(/^#?(\d+)$/)
 
