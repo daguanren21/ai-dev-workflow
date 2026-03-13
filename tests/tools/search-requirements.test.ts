@@ -50,8 +50,9 @@ describe('handleSearchRequirements', () => {
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
     expect(result.content[0].text).toContain('1')
-    expect(result.content[0].text).toContain('TEST-001')
+    expect(result.content[0].text).toContain('[OPEN] TEST-001')
     expect(result.content[0].text).toContain('Test Feature')
+    expect(result.content[0].text).toContain('- Content: A test description that is moderately long')
   })
 
   it('should handle empty results', async () => {
@@ -82,8 +83,44 @@ describe('handleSearchRequirements', () => {
     const result = await handleSearchRequirements({ query: 'test' }, adapters, 'ones')
 
     expect(result.content[0].text).toContain('...')
-    // Should not contain the full 300-char string
     expect(result.content[0].text.length).toBeLessThan(longDesc.length + 500)
+  })
+
+  it('should format list output for 我的缺陷 query', async () => {
+    adapters.set('ones', createMockAdapter({
+      items: [
+        {
+          ...mockSearchResult.items[0],
+          id: 'bug-001',
+          title: '#101 登录页白屏',
+          status: 'open',
+          priority: 'high',
+          type: 'bug',
+          assignee: '当前用户',
+          description: '',
+        },
+        {
+          ...mockSearchResult.items[0],
+          id: 'bug-002',
+          title: '#102 导出报错',
+          status: 'in_progress',
+          priority: 'normal',
+          type: 'bug',
+          assignee: '当前用户',
+          description: '',
+        },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    }))
+
+    const result = await handleSearchRequirements({ query: '查询我所有缺陷' }, adapters, 'ones')
+
+    expect(result.content[0].text).toContain('Found **2** items')
+    expect(result.content[0].text).toContain('Use an item ID or number in the next step to fetch detail.')
+    expect(result.content[0].text).toContain('#101 登录页白屏')
+    expect(result.content[0].text).toContain('#102 导出报错')
   })
 
   it('should throw if source not available', async () => {

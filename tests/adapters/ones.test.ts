@@ -79,6 +79,7 @@ describe('onesAdapter', () => {
   let adapter: OnesAdapter
 
   beforeEach(() => {
+    mockFetch.mockReset()
     vi.clearAllMocks()
     adapter = new OnesAdapter(
       'ones',
@@ -107,8 +108,8 @@ describe('onesAdapter', () => {
       expect(result.title).toBe('#95945 实现用户认证模块')
       expect(result.status).toBe('in_progress')
       expect(result.priority).toBe('high')
-      expect(result.type).toBe('feature') // 需求 → feature
-      expect(result.assignee).toBe('张三')
+      expect(result.type).toBe('feature') // 需求 -> feature
+      expect(result.assignee).toBe('虚拟用户丙')
 
       // Verify GraphQL call used correct endpoint
       const graphqlCall = mockFetch.mock.calls[7]
@@ -127,7 +128,7 @@ describe('onesAdapter', () => {
 
       expect(result.description).toContain('Related Tasks')
       expect(result.description).toContain('#95946 前端页面开发')
-      expect(result.description).toContain('李四')
+      expect(result.description).toContain('虚拟用户丁')
     })
 
     it('should throw if task not found', async () => {
@@ -175,6 +176,186 @@ describe('onesAdapter', () => {
       expect(result.items).toHaveLength(1)
       expect(result.items[0].title).toContain('认证')
       expect(result.total).toBe(1)
+    })
+
+    it('should return current user bugs in to_do and in_progress when query asks for all bugs', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueTypes),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.searchMine),
+      })
+
+      const result = await adapter.searchRequirements({ query: '查询我所有缺陷' })
+
+      expect(result.items.map(item => item.id)).toEqual(['bug-001', 'bug-002'])
+      expect(result.items.every(item => item.type === 'bug')).toBe(true)
+    })
+
+    it('should return current user tasks when query asks for all tasks', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueTypes),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.searchMine),
+      })
+
+      const result = await adapter.searchRequirements({ query: '查询我所有任务' })
+
+      expect(result.items).toHaveLength(1)
+      expect(result.items[0].id).toBe('task-003')
+      expect(result.items[0].type).toBe('task')
+      expect(result.items.find(item => item.id === 'req-004')).toBeUndefined()
+    })
+
+    it('should reuse issue type cache across repeated search queries', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueTypes),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.searchMine),
+      })
+
+      await adapter.searchRequirements({ query: '查询我所有缺陷' })
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.searchMine),
+      })
+
+      await adapter.searchRequirements({ query: '查询我所有任务' })
+
+      const issueTypeCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('t=issueTypes'))
+      expect(issueTypeCalls).toHaveLength(1)
+    })
+
+    it('should return bugs assigned to a named assignee when query uses 负责人为', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.userSearch),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueTypes),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.searchAssignee),
+      })
+
+      const result = await adapter.searchRequirements({ query: '负责人为虚拟用户甲的缺陷' })
+
+      expect(result.items.map(item => item.id)).toEqual(['bug-wtl-001', 'bug-wtl-002'])
+      expect(result.items.every(item => item.assignee === '虚拟用户甲')).toBe(true)
+
+      const userSearchCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/users/search'))
+      expect(userSearchCall).toBeTruthy()
+      expect(JSON.parse(String(userSearchCall?.[1].body))).toMatchObject({
+        keyword: '虚拟用户甲',
+        status: [1],
+        team_member_status: [1, 4],
+        types: [1, 10],
+      })
+
+      const graphQlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('t=group-task-data'))
+      const searchCallBody = JSON.parse(String(graphQlCalls.at(-1)?.[1].body))
+      expect(searchCallBody.variables.filterGroup[0].assign_in).toEqual(['user-wtl'])
+    })
+
+    it('should return bugs assigned to a named assignee when query uses 查询某人的缺陷', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.userSearch),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueTypes),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.searchAssignee),
+      })
+
+      const result = await adapter.searchRequirements({ query: '查询虚拟用户甲的缺陷' })
+
+      expect(result.items.map(item => item.id)).toEqual(['bug-wtl-001', 'bug-wtl-002'])
+      expect(result.items.find(item => item.id === 'bug-other-003')).toBeUndefined()
+    })
+
+    it('should match assignee names when ONES display name includes English suffix', async () => {
+      mockLoginFlow()
+
+      const userSearchWithDisplayName = {
+        ...onesFixture.userSearch,
+        users: onesFixture.userSearch.users.map((user, index) =>
+          index === 0 ? { ...user, name: '虚拟用户甲 Demo User A' } : user),
+      }
+
+      const searchAssigneeWithDisplayName = {
+        ...onesFixture.searchAssignee,
+        data: {
+          ...onesFixture.searchAssignee.data,
+          buckets: onesFixture.searchAssignee.data.buckets.map(bucket => ({
+            ...bucket,
+            tasks: (bucket.tasks ?? []).map((task) => {
+              if (task.assign?.uuid !== 'user-wtl')
+                return task
+
+              return {
+                ...task,
+                assign: {
+                  ...task.assign,
+                  name: '虚拟用户甲 Demo User A',
+                },
+              }
+            }),
+          })),
+        },
+      }
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(userSearchWithDisplayName),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueTypes),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(searchAssigneeWithDisplayName),
+      })
+
+      const result = await adapter.searchRequirements({ query: '查询虚拟用户甲的缺陷' })
+
+      expect(result.items.map(item => item.id)).toEqual(['bug-wtl-001', 'bug-wtl-002'])
+    })
+
+    it('should return empty result when named assignee cannot be resolved to a user uuid', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ users: [] }),
+      })
+
+      const result = await adapter.searchRequirements({ query: '查询不存在的人的缺陷' })
+
+      expect(result.items).toHaveLength(0)
+      expect(result.total).toBe(0)
+
+      const graphQlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('t=group-task-data'))
+      expect(graphQlCalls).toHaveLength(0)
     })
 
     it('should filter by task number with # prefix', async () => {
