@@ -220,6 +220,51 @@
       }
     }
   },
+  "testcaseModuleSearch": {
+    "data": {
+      "testcaseModules": [
+        {
+          "key": "testcase_module-Dkdie5Tu",
+          "name": "#302 RMA重构",
+          "uuid": "Dkdie5Tu",
+          "parent": { "name": "项目相关[2026]", "uuid": "X8VBwf4v" }
+        }
+      ]
+    }
+  },
+  "testcaseList": {
+    "data": {
+      "buckets": [{
+        "key": "bucket.0.__all",
+        "pageInfo": { "count": 2, "totalCount": 2, "hasNextPage": false, "endCursor": "" },
+        "testcaseCases": [
+          { "uuid": "case-001", "id": "T166341", "name": "01.检查seller端菜单设置", "key": "testcase_case-case-001", "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "assign": { "uuid": "u1", "name": "戚明珠" }, "testcaseModule": { "uuid": "Dkdie5Tu" } },
+          { "uuid": "case-002", "id": "T166342", "name": "02.历史售后规则初始化检查", "key": "testcase_case-case-002", "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "assign": { "uuid": "u1", "name": "戚明珠" }, "testcaseModule": { "uuid": "Dkdie5Tu" } }
+        ]
+      }]
+    }
+  },
+  "testcaseDetail": {
+    "data": {
+      "testcaseCases": [
+        { "uuid": "case-001", "id": "T166341", "name": "01.检查seller端菜单设置", "key": "testcase_case-case-001", "condition": "", "desc": "", "assign": { "uuid": "u1", "name": "戚明珠" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "X8VBwf4v-Dkdie5Tu-case-001", "testcaseLibrary": { "uuid": "KQjsNmut" }, "testcaseModule": { "uuid": "Dkdie5Tu" }, "relatedTasks": [{ "uuid": "task-uuid-302", "name": "#302 RMA重构", "number": 90058 }] },
+        { "uuid": "case-002", "id": "T166342", "name": "02.历史售后规则初始化检查", "key": "testcase_case-case-002", "condition": "seller已有历史售后规则", "desc": "", "assign": { "uuid": "u1", "name": "戚明珠" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "X8VBwf4v-Dkdie5Tu-case-002", "testcaseLibrary": { "uuid": "KQjsNmut" }, "testcaseModule": { "uuid": "Dkdie5Tu" }, "relatedTasks": [] }
+      ],
+      "testcaseCaseSteps": [
+        { "uuid": "step-001", "key": "testcase_case_step-step-001", "testcaseCase": { "uuid": "case-001" }, "desc": "使用seller账号登入，检查菜单", "result": "新增菜单：店铺管理-售后规则设置", "index": 0 },
+        { "uuid": "step-002", "key": "testcase_case_step-step-002", "testcaseCase": { "uuid": "case-002" }, "desc": "打开已有规则的seller页面", "result": "显示历史规则列表", "index": 0 },
+        { "uuid": "step-003", "key": "testcase_case_step-step-003", "testcaseCase": { "uuid": "case-002" }, "desc": "检查初始化状态", "result": "规则状态为已生效", "index": 1 }
+      ]
+    }
+  },
+  "taskSearch302": {
+    "data": {
+      "buckets": [{
+        "key": "default",
+        "tasks": [{ "key": "task-LTFJt58zvGWkDFMA", "uuid": "LTFJt58zvGWkDFMA", "number": 302, "name": "#302 RMA重构" }]
+      }]
+    }
+  },
   "issueDetail": {
     "data": {
       "task": {
