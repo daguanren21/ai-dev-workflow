@@ -212,6 +212,15 @@ const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
 
 // ============ Testcase GraphQL queries ============
 
+const TESTCASE_LIBRARY_LIST_QUERY = `
+  query Q {
+    testcaseLibraries {
+      uuid name key
+      testcaseCaseCount
+    }
+  }
+`
+
 const TESTCASE_MODULE_SEARCH_QUERY = `
   query Q($filter: Filter) {
     testcaseModules(filter: $filter) {
@@ -222,8 +231,8 @@ const TESTCASE_MODULE_SEARCH_QUERY = `
 `
 
 const TESTCASE_LIST_PAGED_QUERY = `
-  query PAGED_LIBRARY_TESTCASE_LIST($testCaseFilter: Filter) {
-    buckets(groupBy: {testcaseCases: {}}, pagination: {limit: 50, after: "", preciseCount: true}) {
+  query PAGED_LIBRARY_TESTCASE_LIST($testCaseFilter: Filter, $pagination: Pagination) {
+    buckets(groupBy: {testcaseCases: {}}, pagination: $pagination) {
       testcaseCases(filterGroup: $testCaseFilter, limit: 10000) {
         uuid name key id
         priority { uuid value }
@@ -1263,10 +1272,22 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   async getTestcases(params: GetTestcasesParams): Promise<TestCaseResult> {
-    const libraryUuid = params.libraryUuid
+    let libraryUuid = params.libraryUuid
       ?? (this.config.options?.testcaseLibraryUuid as string)
+
+    // Auto-fetch library UUID if not configured
     if (!libraryUuid) {
-      throw new Error('ONES: testcaseLibraryUuid not configured. Set it in options.testcaseLibraryUuid')
+      const libData = await this.graphql<{
+        data?: { testcaseLibraries?: Array<{ uuid: string, name: string, testcaseCaseCount: number }> }
+      }>(TESTCASE_LIBRARY_LIST_QUERY, {}, 'library-select')
+
+      const libs = libData.data?.testcaseLibraries ?? []
+      if (libs.length === 0) {
+        throw new Error('ONES: No testcase libraries found for this team')
+      }
+      // Pick the library with the most cases (most likely the main one)
+      libs.sort((a, b) => b.testcaseCaseCount - a.testcaseCaseCount)
+      libraryUuid = libs[0].uuid
     }
 
     // Step 1: Search task by number to get task name
@@ -1307,23 +1328,39 @@ export class OnesAdapter extends BaseAdapter {
     }
     const mod = modules[0]
 
-    // Step 3: List all testcases under this module
-    const listData = await this.graphql<{
-      data?: {
-        buckets?: Array<{
-          pageInfo: { totalCount: number, hasNextPage: boolean }
-          testcaseCases: Array<{ uuid: string, id: string, name: string }>
-        }>
-      }
-    }>(
-      TESTCASE_LIST_PAGED_QUERY,
-      { testCaseFilter: [{ testcaseLibrary_in: [libraryUuid], path_match: mod.uuid }] },
-      'testcase-list-paged',
-    )
+    // Step 3: List ALL testcases under this module (paginated)
+    const caseList: Array<{ uuid: string, id: string, name: string }> = []
+    let cursor = ''
+    let totalCount = 0
 
-    const bucket = listData.data?.buckets?.[0]
-    const caseList = bucket?.testcaseCases ?? []
-    const totalCount = bucket?.pageInfo?.totalCount ?? caseList.length
+    while (true) {
+      const listData = await this.graphql<{
+        data?: {
+          buckets?: Array<{
+            pageInfo: { totalCount: number, hasNextPage: boolean, endCursor: string }
+            testcaseCases: Array<{ uuid: string, id: string, name: string }>
+          }>
+        }
+      }>(
+        TESTCASE_LIST_PAGED_QUERY,
+        {
+          testCaseFilter: [{ testcaseLibrary_in: [libraryUuid], path_match: mod.uuid }],
+          pagination: { limit: 50, after: cursor, preciseCount: true },
+        },
+        'testcase-list-paged',
+      )
+
+      const bucket = listData.data?.buckets?.[0]
+      if (!bucket)
+        break
+
+      caseList.push(...(bucket.testcaseCases ?? []))
+      totalCount = bucket.pageInfo.totalCount
+
+      if (!bucket.pageInfo.hasNextPage)
+        break
+      cursor = bucket.pageInfo.endCursor
+    }
 
     if (caseList.length === 0) {
       return { taskNumber: params.taskNumber, taskName: task.name, moduleName: mod.name, moduleUuid: mod.uuid, totalCount: 0, cases: [] }
@@ -1375,6 +1412,9 @@ export class OnesAdapter extends BaseAdapter {
       }
 
       for (const c of cases) {
+        // Refresh stale image URLs in desc (ONES returns placeholder base64 for lazy-loaded images)
+        const freshDesc = c.desc ? await this.refreshImageUrls(c.desc) : ''
+
         allCases.push({
           uuid: c.uuid,
           id: c.id,
@@ -1383,7 +1423,7 @@ export class OnesAdapter extends BaseAdapter {
           type: c.type?.value ?? 'Unknown',
           assignName: c.assign?.name ?? null,
           condition: c.condition ?? '',
-          desc: c.desc ?? '',
+          desc: freshDesc,
           steps: (stepsByCase.get(c.uuid) ?? []).sort((a, b) => a.index - b.index),
           modulePath: c.path ?? '',
         })

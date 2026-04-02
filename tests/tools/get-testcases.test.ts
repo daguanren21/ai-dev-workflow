@@ -4,32 +4,32 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleGetTestcases } from '../../src/tools/get-testcases.js'
 
 const mockResult: TestCaseResult = {
-  taskNumber: 302,
-  taskName: '#302 RMA重构',
-  moduleName: '#302 RMA重构',
-  moduleUuid: 'Dkdie5Tu',
+  taskNumber: 100,
+  taskName: '#100 功能模块重构',
+  moduleName: '#100 功能模块重构',
+  moduleUuid: 'mod-uuid-100',
   totalCount: 2,
   cases: [
     {
       uuid: 'case-001',
-      id: 'T166341',
-      name: '01.检查seller端菜单设置',
+      id: 'T100001',
+      name: '01.检查登录页面样式',
       priority: 'P0',
       type: '功能测试',
-      assignName: '戚明珠',
+      assignName: '测试用户A',
       condition: '',
       desc: '',
       modulePath: '',
-      steps: [{ uuid: 's1', index: 0, desc: '使用seller账号登入', result: '新增菜单' }],
+      steps: [{ uuid: 's1', index: 0, desc: '打开登录页面，检查页面元素', result: '页面元素显示正确' }],
     },
     {
       uuid: 'case-002',
-      id: 'T166342',
-      name: '02.历史售后规则初始化检查',
+      id: 'T100002',
+      name: '02.检查列表页数据加载',
       priority: 'P0',
       type: '功能测试',
-      assignName: '戚明珠',
-      condition: 'seller已有历史规则',
+      assignName: '测试用户A',
+      condition: '用户已有历史数据',
       desc: '',
       modulePath: '',
       steps: [
@@ -61,31 +61,31 @@ describe('handleGetTestcases', () => {
 
   it('should return formatted testcase list with steps', async () => {
     const result = await handleGetTestcases(
-      { taskNumber: '302' },
+      { taskNumber: '100' },
       adapters,
       'ones',
     )
 
     const text = result.content[0].text
-    expect(text).toContain('#302 RMA重构')
-    expect(text).toContain('T166341')
-    expect(text).toContain('检查seller端菜单设置')
-    expect(text).toContain('seller账号')
+    expect(text).toContain('#100 功能模块重构')
+    expect(text).toContain('T100001')
+    expect(text).toContain('检查登录页面样式')
+    expect(text).toContain('登录页面')
     expect(text).toContain('2 个用例')
   })
 
   it('should include condition when present', async () => {
     const result = await handleGetTestcases(
-      { taskNumber: '302' },
+      { taskNumber: '100' },
       adapters,
       'ones',
     )
-    expect(result.content[0].text).toContain('seller已有历史规则')
+    expect(result.content[0].text).toContain('用户已有历史数据')
   })
 
   it('should throw if no source specified', async () => {
     await expect(
-      handleGetTestcases({ taskNumber: '302' }, adapters, undefined),
+      handleGetTestcases({ taskNumber: '100' }, adapters, undefined),
     ).rejects.toThrow('No source specified')
   })
 

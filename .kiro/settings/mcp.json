@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "requirements": {
+      "command": "node",
+      "args": [
+        "D:\\GitHub code\\ai-dev-workflow\\dist\\index.mjs"
+      ],
+      "env": {
+        "ONES_ACCOUNT": "zhangqihui@gigacloudtech.com",
+        "ONES_API_BASE": "https://1s.oristand.com",
+        "ONES_PASSWORD": "zqh1363917353!!",
+        "PROGRAMFILES": "C:\\Program Files",
+        "SystemRoot": "C:\\Windows"
+      }
+    }
+  }
+}
+    // "requirements": {
+    //   "command": "cmd",
+    //   "args": [
+    //     "/c",
+    //     "npx",
+    //     "-y",
+    //     "ai-dev-requirements@latest"
+    //   ],
+    //   "env": {
+    //     "ONES_ACCOUNT": "zhangqihui@gigacloudtech.com",
+    //     "ONES_API_BASE": "https://1s.oristand.com",
+    //     "ONES_PASSWORD": "zqh1363917353!!",
+    //     "PROGRAMFILES": "C:\\Program Files",
+    //     "SystemRoot": "C:\\Windows"
+    //   }
+    // },

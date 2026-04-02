@@ -596,23 +596,23 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve(onesFixture.testcaseDetail),
       })
 
-      const result = await adapter.getTestcases({ taskNumber: 302, libraryUuid: 'KQjsNmut' })
+      const result = await adapter.getTestcases({ taskNumber: 100, libraryUuid: 'lib-uuid-001' })
 
-      expect(result.taskNumber).toBe(302)
-      expect(result.taskName).toBe('#302 RMA重构')
-      expect(result.moduleName).toBe('#302 RMA重构')
+      expect(result.taskNumber).toBe(100)
+      expect(result.taskName).toBe('#100 功能模块重构')
+      expect(result.moduleName).toBe('#100 功能模块重构')
       expect(result.totalCount).toBe(2)
       expect(result.cases).toHaveLength(2)
 
       // First case has 1 step
-      expect(result.cases[0].name).toBe('01.检查seller端菜单设置')
+      expect(result.cases[0].name).toBe('01.检查登录页面样式')
       expect(result.cases[0].steps).toHaveLength(1)
-      expect(result.cases[0].steps[0].desc).toBe('使用seller账号登入，检查菜单')
+      expect(result.cases[0].steps[0].desc).toBe('打开登录页面，检查页面元素')
 
       // Second case has 2 steps and a condition
-      expect(result.cases[1].name).toBe('02.历史售后规则初始化检查')
+      expect(result.cases[1].name).toBe('02.检查列表页数据加载')
       expect(result.cases[1].steps).toHaveLength(2)
-      expect(result.cases[1].condition).toBe('seller已有历史售后规则')
+      expect(result.cases[1].condition).toBe('用户已有历史数据')
     })
 
     it('should throw if task number not found', async () => {
@@ -623,7 +623,7 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve({ data: { buckets: [{ key: 'default', tasks: [] }] } }),
       })
 
-      await expect(adapter.getTestcases({ taskNumber: 999, libraryUuid: 'KQjsNmut' }))
+      await expect(adapter.getTestcases({ taskNumber: 999, libraryUuid: 'lib-uuid-001' }))
         .rejects
         .toThrow('Task #999 not found')
     })
@@ -641,9 +641,9 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve({ data: { testcaseModules: [] } }),
       })
 
-      await expect(adapter.getTestcases({ taskNumber: 302, libraryUuid: 'KQjsNmut' }))
+      await expect(adapter.getTestcases({ taskNumber: 100, libraryUuid: 'lib-uuid-001' }))
         .rejects
-        .toThrow('No testcase module matching "#302"')
+        .toThrow('No testcase module matching "#100"')
     })
   })
 })
