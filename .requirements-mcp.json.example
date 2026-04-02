@@ -2,11 +2,14 @@
   "sources": {
     "ones": {
       "enabled": true,
-      "apiBase": "https://your-company.ones.com",
+      "apiBase": "https://your-ones-instance.com",
       "auth": {
         "type": "ones-pkce",
         "emailEnv": "ONES_ACCOUNT",
         "passwordEnv": "ONES_PASSWORD"
+      },
+      "options": {
+        "testcaseLibraryUuid": "YOUR_LIBRARY_UUID"
       }
     }
   },

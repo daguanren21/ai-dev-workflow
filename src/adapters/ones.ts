@@ -1,7 +1,7 @@
 import type { SourceConfig } from '../types/config.js'
-import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType } from '../types/requirement.js'
+import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep } from '../types/requirement.js'
 
-import type { GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, SearchRequirementsParams } from './base.js'
+import type { GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams } from './base.js'
 import crypto from 'node:crypto'
 import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
 import { BaseAdapter } from './base.js'
@@ -209,6 +209,61 @@ const ISSUE_DETAIL_QUERY = `
 `
 
 const DEFAULT_STATUS_NOT_IN = ['FgMGkcaq', 'NvRwHBSo', 'Dn3k8ffK', 'TbmY2So5']
+
+// ============ Testcase GraphQL queries ============
+
+const TESTCASE_LIBRARY_LIST_QUERY = `
+  query Q {
+    testcaseLibraries {
+      uuid name key
+      testcaseCaseCount
+    }
+  }
+`
+
+const TESTCASE_MODULE_SEARCH_QUERY = `
+  query Q($filter: Filter) {
+    testcaseModules(filter: $filter) {
+      uuid name key
+      parent { uuid name }
+    }
+  }
+`
+
+const TESTCASE_LIST_PAGED_QUERY = `
+  query PAGED_LIBRARY_TESTCASE_LIST($testCaseFilter: Filter, $pagination: Pagination) {
+    buckets(groupBy: {testcaseCases: {}}, pagination: $pagination) {
+      testcaseCases(filterGroup: $testCaseFilter, limit: 10000) {
+        uuid name key id
+        priority { uuid value }
+        type { uuid value }
+        assign { uuid name }
+        testcaseModule { uuid }
+      }
+      key
+      pageInfo { count totalCount hasNextPage endCursor }
+    }
+  }
+`
+
+const TESTCASE_DETAIL_QUERY = `
+  query QUERY_TESTCASES_DETAIL($testCaseFilter: Filter, $stepFilter: Filter) {
+    testcaseCases(filter: $testCaseFilter) {
+      uuid name key id condition desc path
+      assign { uuid name }
+      priority { uuid value }
+      type { uuid value }
+      testcaseLibrary { uuid }
+      testcaseModule { uuid }
+      relatedTasks { uuid name number }
+    }
+    testcaseCaseSteps(filter: $stepFilter, orderBy: { index: ASC }) {
+      key uuid
+      testcaseCase { uuid }
+      desc result index
+    }
+  }
+`
 
 // ============ Helpers ============
 
@@ -1214,5 +1269,167 @@ export class OnesAdapter extends BaseAdapter {
       sprintName: task.sprint?.name ?? null,
       raw: task as unknown as Record<string, unknown>,
     }
+  }
+
+  async getTestcases(params: GetTestcasesParams): Promise<TestCaseResult> {
+    let libraryUuid = params.libraryUuid
+      ?? (this.config.options?.testcaseLibraryUuid as string)
+
+    // Auto-fetch library UUID if not configured
+    if (!libraryUuid) {
+      const libData = await this.graphql<{
+        data?: { testcaseLibraries?: Array<{ uuid: string, name: string, testcaseCaseCount: number }> }
+      }>(TESTCASE_LIBRARY_LIST_QUERY, {}, 'library-select')
+
+      const libs = libData.data?.testcaseLibraries ?? []
+      if (libs.length === 0) {
+        throw new Error('ONES: No testcase libraries found for this team')
+      }
+      // Pick the library with the most cases (most likely the main one)
+      libs.sort((a, b) => b.testcaseCaseCount - a.testcaseCaseCount)
+      libraryUuid = libs[0].uuid
+    }
+
+    // Step 1: Search task by number to get task name
+    const searchData = await this.graphql<{
+      data?: { buckets?: Array<{ tasks?: Array<{ uuid: string, number: number, name: string }> }> }
+    }>(
+      SEARCH_TASKS_QUERY,
+      {
+        groupBy: { tasks: {} },
+        groupOrderBy: null,
+        orderBy: { createTime: 'DESC' },
+        filterGroup: [{ number_in: [params.taskNumber] }],
+        search: null,
+        pagination: { limit: 10, preciseCount: false },
+        limit: 10,
+      },
+      'group-task-data',
+    )
+
+    const allTasks = searchData.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
+    const task = allTasks.find(t => t.number === params.taskNumber)
+    if (!task) {
+      throw new Error(`ONES: Task #${params.taskNumber} not found`)
+    }
+
+    // Step 2: Search testcase module by task number pattern (e.g. "#302")
+    const moduleData = await this.graphql<{
+      data?: { testcaseModules?: Array<{ uuid: string, name: string }> }
+    }>(
+      TESTCASE_MODULE_SEARCH_QUERY,
+      { filter: { testcaseLibrary_in: [libraryUuid], name_match: `#${params.taskNumber}` } },
+      'find-testcase-module',
+    )
+
+    const modules = moduleData.data?.testcaseModules ?? []
+    if (modules.length === 0) {
+      throw new Error(`ONES: No testcase module matching "#${params.taskNumber}" in library ${libraryUuid}`)
+    }
+    const mod = modules[0]
+
+    // Step 3: List ALL testcases under this module (paginated)
+    const caseList: Array<{ uuid: string, id: string, name: string }> = []
+    let cursor = ''
+    let totalCount = 0
+
+    while (true) {
+      const listData = await this.graphql<{
+        data?: {
+          buckets?: Array<{
+            pageInfo: { totalCount: number, hasNextPage: boolean, endCursor: string }
+            testcaseCases: Array<{ uuid: string, id: string, name: string }>
+          }>
+        }
+      }>(
+        TESTCASE_LIST_PAGED_QUERY,
+        {
+          testCaseFilter: [{ testcaseLibrary_in: [libraryUuid], path_match: mod.uuid }],
+          pagination: { limit: 50, after: cursor, preciseCount: true },
+        },
+        'testcase-list-paged',
+      )
+
+      const bucket = listData.data?.buckets?.[0]
+      if (!bucket)
+        break
+
+      caseList.push(...(bucket.testcaseCases ?? []))
+      totalCount = bucket.pageInfo.totalCount
+
+      if (!bucket.pageInfo.hasNextPage)
+        break
+      cursor = bucket.pageInfo.endCursor
+    }
+
+    if (caseList.length === 0) {
+      return { taskNumber: params.taskNumber, taskName: task.name, moduleName: mod.name, moduleUuid: mod.uuid, totalCount: 0, cases: [] }
+    }
+
+    // Step 4: Fetch details + steps in batches of 20
+    const allCases: TestCase[] = []
+    const BATCH_SIZE = 20
+    for (let i = 0; i < caseList.length; i += BATCH_SIZE) {
+      const batch = caseList.slice(i, i + BATCH_SIZE)
+      const uuids = batch.map(c => c.uuid)
+
+      const detailData = await this.graphql<{
+        data?: {
+          testcaseCases: Array<{
+            uuid: string
+            id: string
+            name: string
+            condition: string
+            desc: string
+            path: string
+            assign?: { name: string } | null
+            priority?: { value: string } | null
+            type?: { value: string } | null
+          }>
+          testcaseCaseSteps: Array<{
+            uuid: string
+            desc: string
+            result: string
+            index: number
+            testcaseCase: { uuid: string }
+          }>
+        }
+      }>(
+        TESTCASE_DETAIL_QUERY,
+        { testCaseFilter: { uuid_in: [...uuids, null] }, stepFilter: { testcaseCase_in: uuids } },
+        'library-testcase-detail',
+      )
+
+      const cases = detailData.data?.testcaseCases ?? []
+      const steps = detailData.data?.testcaseCaseSteps ?? []
+
+      const stepsByCase = new Map<string, TestCaseStep[]>()
+      for (const step of steps) {
+        const caseUuid = step.testcaseCase.uuid
+        if (!stepsByCase.has(caseUuid))
+          stepsByCase.set(caseUuid, [])
+        stepsByCase.get(caseUuid)!.push({ uuid: step.uuid, index: step.index, desc: step.desc ?? '', result: step.result ?? '' })
+      }
+
+      for (const c of cases) {
+        // Refresh stale image URLs in desc (ONES returns placeholder base64 for lazy-loaded images)
+        const freshDesc = c.desc ? await this.refreshImageUrls(c.desc) : ''
+
+        allCases.push({
+          uuid: c.uuid,
+          id: c.id,
+          name: c.name,
+          priority: c.priority?.value ?? 'N/A',
+          type: c.type?.value ?? 'Unknown',
+          assignName: c.assign?.name ?? null,
+          condition: c.condition ?? '',
+          desc: freshDesc,
+          steps: (stepsByCase.get(c.uuid) ?? []).sort((a, b) => a.index - b.index),
+          modulePath: c.path ?? '',
+        })
+      }
+    }
+
+    return { taskNumber: params.taskNumber, taskName: task.name, moduleName: mod.name, moduleUuid: mod.uuid, totalCount, cases: allCases }
   }
 }

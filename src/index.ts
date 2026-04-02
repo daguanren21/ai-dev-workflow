@@ -9,6 +9,7 @@ import { loadConfig } from './config/loader.js'
 import { GetIssueDetailSchema, handleGetIssueDetail } from './tools/get-issue-detail.js'
 import { GetRelatedIssuesSchema, handleGetRelatedIssues } from './tools/get-related-issues.js'
 import { GetRequirementSchema, handleGetRequirement } from './tools/get-requirement.js'
+import { GetTestcasesSchema, handleGetTestcases } from './tools/get-testcases.js'
 import { handleListSources } from './tools/list-sources.js'
 import { handleSearchRequirements, SearchRequirementsSchema } from './tools/search-requirements.js'
 
@@ -151,6 +152,23 @@ async function main() {
     async (params) => {
       try {
         return await handleGetIssueDetail(params, adapters, config.config.defaultSource)
+      }
+      catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  server.tool(
+    'get_testcases',
+    'Get all test cases for a task by its number (e.g. 302). Searches the testcase library for a matching module and returns all cases with steps.',
+    GetTestcasesSchema.shape,
+    async (params) => {
+      try {
+        return await handleGetTestcases(params, adapters, config.config.defaultSource)
       }
       catch (err) {
         return {

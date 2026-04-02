@@ -1,5 +1,5 @@
 import type { SourceConfig } from '../types/config.js'
-import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType } from '../types/requirement.js'
+import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCaseResult } from '../types/requirement.js'
 
 export interface GetRequirementParams {
   id: string
@@ -17,6 +17,11 @@ export interface GetRelatedIssuesParams {
 
 export interface GetIssueDetailParams {
   issueId: string
+}
+
+export interface GetTestcasesParams {
+  taskNumber: number
+  libraryUuid?: string
 }
 
 /**
@@ -51,4 +56,6 @@ export abstract class BaseAdapter {
   abstract getRelatedIssues(params: GetRelatedIssuesParams): Promise<RelatedIssue[]>
 
   abstract getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail>
+
+  abstract getTestcases(params: GetTestcasesParams): Promise<TestCaseResult>
 }

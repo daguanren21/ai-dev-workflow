@@ -127,6 +127,19 @@ function loadConfigFromEnv(): McpConfig | null {
     return null
   }
 
+  // Try to read options from config file if it exists
+  let options: Record<string, unknown> | undefined
+  const configPath = findConfigFile(process.cwd())
+  if (configPath) {
+    try {
+      const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as { sources?: { ones?: { options?: Record<string, unknown> } } }
+      options = raw?.sources?.ones?.options
+    }
+    catch {
+      // ignore parse errors, env config is primary
+    }
+  }
+
   return {
     sources: {
       ones: {
@@ -137,6 +150,7 @@ function loadConfigFromEnv(): McpConfig | null {
           emailEnv: 'ONES_ACCOUNT',
           passwordEnv: 'ONES_PASSWORD',
         },
+        options,
       },
     },
     defaultSource: 'ones',

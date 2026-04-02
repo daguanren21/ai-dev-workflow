@@ -86,3 +86,32 @@ export interface IssueDetail {
   sprintName: string | null
   raw: Record<string, unknown>
 }
+
+export interface TestCaseStep {
+  uuid: string
+  index: number
+  desc: string
+  result: string
+}
+
+export interface TestCase {
+  uuid: string
+  id: string
+  name: string
+  priority: string
+  type: string
+  assignName: string | null
+  condition: string
+  desc: string
+  steps: TestCaseStep[]
+  modulePath: string
+}
+
+export interface TestCaseResult {
+  taskNumber: number
+  taskName: string
+  moduleName: string
+  moduleUuid: string
+  totalCount: number
+  cases: TestCase[]
+}

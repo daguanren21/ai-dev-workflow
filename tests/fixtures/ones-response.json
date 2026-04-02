@@ -220,6 +220,51 @@
       }
     }
   },
+  "testcaseModuleSearch": {
+    "data": {
+      "testcaseModules": [
+        {
+          "key": "testcase_module-mod-uuid-100",
+          "name": "#100 功能模块重构",
+          "uuid": "mod-uuid-100",
+          "parent": { "name": "测试模块分类", "uuid": "parent-mod-001" }
+        }
+      ]
+    }
+  },
+  "testcaseList": {
+    "data": {
+      "buckets": [{
+        "key": "bucket.0.__all",
+        "pageInfo": { "count": 2, "totalCount": 2, "hasNextPage": false, "endCursor": "" },
+        "testcaseCases": [
+          { "uuid": "case-001", "id": "T100001", "name": "01.检查登录页面样式", "key": "testcase_case-case-001", "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "assign": { "uuid": "u1", "name": "测试用户A" }, "testcaseModule": { "uuid": "mod-uuid-100" } },
+          { "uuid": "case-002", "id": "T100002", "name": "02.检查列表页数据加载", "key": "testcase_case-case-002", "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "assign": { "uuid": "u1", "name": "测试用户A" }, "testcaseModule": { "uuid": "mod-uuid-100" } }
+        ]
+      }]
+    }
+  },
+  "testcaseDetail": {
+    "data": {
+      "testcaseCases": [
+        { "uuid": "case-001", "id": "T100001", "name": "01.检查登录页面样式", "key": "testcase_case-case-001", "condition": "", "desc": "", "assign": { "uuid": "u1", "name": "测试用户A" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "parent-mod-001-mod-uuid-100-case-001", "testcaseLibrary": { "uuid": "lib-uuid-001" }, "testcaseModule": { "uuid": "mod-uuid-100" }, "relatedTasks": [{ "uuid": "task-uuid-100", "name": "#100 功能模块重构", "number": 90058 }] },
+        { "uuid": "case-002", "id": "T100002", "name": "02.检查列表页数据加载", "key": "testcase_case-case-002", "condition": "用户已有历史数据", "desc": "", "assign": { "uuid": "u1", "name": "测试用户A" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "parent-mod-001-mod-uuid-100-case-002", "testcaseLibrary": { "uuid": "lib-uuid-001" }, "testcaseModule": { "uuid": "mod-uuid-100" }, "relatedTasks": [] }
+      ],
+      "testcaseCaseSteps": [
+        { "uuid": "step-001", "key": "testcase_case_step-step-001", "testcaseCase": { "uuid": "case-001" }, "desc": "打开登录页面，检查页面元素", "result": "页面元素显示正确", "index": 0 },
+        { "uuid": "step-002", "key": "testcase_case_step-step-002", "testcaseCase": { "uuid": "case-002" }, "desc": "打开列表页面", "result": "显示历史数据列表", "index": 0 },
+        { "uuid": "step-003", "key": "testcase_case_step-step-003", "testcaseCase": { "uuid": "case-002" }, "desc": "检查默认状态", "result": "状态显示为已完成", "index": 1 }
+      ]
+    }
+  },
+  "taskSearch302": {
+    "data": {
+      "buckets": [{
+        "key": "default",
+        "tasks": [{ "key": "task-test-task-100", "uuid": "test-task-100", "number": 100, "name": "#100 功能模块重构" }]
+      }]
+    }
+  },
   "issueDetail": {
     "data": {
       "task": {
