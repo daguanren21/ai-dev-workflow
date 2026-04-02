@@ -1,0 +1,2413 @@
+{
+  "generatedAt": "2026-03-16T10:02:38.347Z",
+  "sourceFiles": 635,
+  "rawUniqueClassTokens": 1347,
+  "matchedUtilityTokenCount": 369,
+  "ignoredTokenCount": 940,
+  "topMatchedUtilityTokens": [
+    {
+      "token": "w-full",
+      "count": 125
+    },
+    {
+      "token": "flex",
+      "count": 81
+    },
+    {
+      "token": "mb-12px",
+      "count": 63
+    },
+    {
+      "token": "items-center",
+      "count": 47
+    },
+    {
+      "token": "font-bold",
+      "count": 44
+    },
+    {
+      "token": "text-24px",
+      "count": 23
+    },
+    {
+      "token": "pt-2px",
+      "count": 22
+    },
+    {
+      "token": "ml-4px",
+      "count": 21
+    },
+    {
+      "token": "mb-0",
+      "count": 21
+    },
+    {
+      "token": "text-center",
+      "count": 18
+    },
+    {
+      "token": "mr-6",
+      "count": 17
+    },
+    {
+      "token": "flex-col",
+      "count": 15
+    },
+    {
+      "token": "items-start",
+      "count": 15
+    },
+    {
+      "token": "mt-16px",
+      "count": 15
+    },
+    {
+      "token": "text-info",
+      "count": 14
+    },
+    {
+      "token": "text-18px",
+      "count": 14
+    },
+    {
+      "token": "justify-between",
+      "count": 13
+    },
+    {
+      "token": "cursor-pointer",
+      "count": 13
+    },
+    {
+      "token": "mr-12px",
+      "count": 13
+    },
+    {
+      "token": "text-sm",
+      "count": 12
+    },
+    {
+      "token": "justify-center",
+      "count": 12
+    },
+    {
+      "token": "mb-10",
+      "count": 11
+    },
+    {
+      "token": "text-[14px]",
+      "count": 11
+    },
+    {
+      "token": "whitespace-nowrap",
+      "count": 10
+    },
+    {
+      "token": "text-base",
+      "count": 10
+    },
+    {
+      "token": "mr-10",
+      "count": 9
+    },
+    {
+      "token": "mb-20",
+      "count": 8
+    },
+    {
+      "token": "mt-12",
+      "count": 8
+    },
+    {
+      "token": "pb-0",
+      "count": 8
+    },
+    {
+      "token": "text-[#2F8DF0]",
+      "count": 8
+    },
+    {
+      "token": "text-[#606266]",
+      "count": 8
+    },
+    {
+      "token": "mr-4px",
+      "count": 8
+    },
+    {
+      "token": "text-14",
+      "count": 8
+    },
+    {
+      "token": "mt-[8px]",
+      "count": 7
+    },
+    {
+      "token": "text-[#303133]",
+      "count": 7
+    },
+    {
+      "token": "font-700",
+      "count": 7
+    },
+    {
+      "token": "relative",
+      "count": 7
+    },
+    {
+      "token": "text-red-500",
+      "count": 6
+    },
+    {
+      "token": "pt-8px",
+      "count": 6
+    },
+    {
+      "token": "mt-10",
+      "count": 6
+    },
+    {
+      "token": "text-[13px]",
+      "count": 6
+    },
+    {
+      "token": "text-[var(--el-text-color-primary)]",
+      "count": 6
+    },
+    {
+      "token": "flex-1",
+      "count": 6
+    },
+    {
+      "token": "truncate",
+      "count": 6
+    },
+    {
+      "token": "break-all",
+      "count": 6
+    },
+    {
+      "token": "mr-4",
+      "count": 6
+    },
+    {
+      "token": "resize-none",
+      "count": 6
+    },
+    {
+      "token": "text-left",
+      "count": 5
+    },
+    {
+      "token": "ml-6px",
+      "count": 5
+    },
+    {
+      "token": "mt-12px",
+      "count": 5
+    },
+    {
+      "token": "ml-10",
+      "count": 5
+    },
+    {
+      "token": "w-60",
+      "count": 5
+    },
+    {
+      "token": "text-[18px]",
+      "count": 5
+    },
+    {
+      "token": "inline-block",
+      "count": 5
+    },
+    {
+      "token": "leading-[22px]",
+      "count": 5
+    },
+    {
+      "token": "mr-20",
+      "count": 5
+    },
+    {
+      "token": "mt-20",
+      "count": 5
+    },
+    {
+      "token": "mt-5",
+      "count": 5
+    },
+    {
+      "token": "text-right",
+      "count": 5
+    },
+    {
+      "token": "mb-[30px]",
+      "count": 5
+    },
+    {
+      "token": "text-zinc-400",
+      "count": 4
+    },
+    {
+      "token": "mb-4",
+      "count": 4
+    },
+    {
+      "token": "ml-8",
+      "count": 4
+    },
+    {
+      "token": "mb-12",
+      "count": 4
+    },
+    {
+      "token": "mb-[12px]",
+      "count": 4
+    },
+    {
+      "token": "w-[50px]",
+      "count": 4
+    },
+    {
+      "token": "h-[50px]",
+      "count": 4
+    },
+    {
+      "token": "mt-[12px]",
+      "count": 4
+    },
+    {
+      "token": "bg-[#FEF0F0]",
+      "count": 4
+    },
+    {
+      "token": "border",
+      "count": 4
+    },
+    {
+      "token": "border-[#FDE2E2]",
+      "count": 4
+    },
+    {
+      "token": "rounded",
+      "count": 4
+    },
+    {
+      "token": "px-[8px]",
+      "count": 4
+    },
+    {
+      "token": "py-[4px]",
+      "count": 4
+    },
+    {
+      "token": "leading-[1.384]",
+      "count": 4
+    },
+    {
+      "token": "text-[#F56C6C]",
+      "count": 4
+    },
+    {
+      "token": "leading-[26px]",
+      "count": 4
+    },
+    {
+      "token": "text-[${variables.textColorPrimary}]",
+      "count": 4
+    },
+    {
+      "token": "min-w-0",
+      "count": 4
+    },
+    {
+      "token": "flex-shrink-0",
+      "count": 4
+    },
+    {
+      "token": "px-0",
+      "count": 4
+    },
+    {
+      "token": "line-through",
+      "count": 4
+    },
+    {
+      "token": "text-[var(--el-color-info)]",
+      "count": 4
+    },
+    {
+      "token": "whitespace-pre-line",
+      "count": 4
+    },
+    {
+      "token": "w-100",
+      "count": 4
+    },
+    {
+      "token": "break-words",
+      "count": 4
+    },
+    {
+      "token": "mr-8px",
+      "count": 4
+    },
+    {
+      "token": "mb-4px",
+      "count": 4
+    },
+    {
+      "token": "mt-0",
+      "count": 4
+    },
+    {
+      "token": "mt-10px",
+      "count": 4
+    },
+    {
+      "token": "mt-4px",
+      "count": 4
+    },
+    {
+      "token": "mb-20px",
+      "count": 4
+    },
+    {
+      "token": "pr-4",
+      "count": 4
+    },
+    {
+      "token": "h-40",
+      "count": 4
+    },
+    {
+      "token": "ml-2",
+      "count": 4
+    },
+    {
+      "token": "float-right",
+      "count": 4
+    },
+    {
+      "token": "mb-6",
+      "count": 4
+    },
+    {
+      "token": "content-img",
+      "count": 4
+    },
+    {
+      "token": "ml-60px",
+      "count": 4
+    },
+    {
+      "token": "text-[#999]",
+      "count": 4
+    },
+    {
+      "token": "w-2/3",
+      "count": 4
+    },
+    {
+      "token": "text-[var(--el-text-color-regular)]",
+      "count": 4
+    },
+    {
+      "token": "bottom-1px",
+      "count": 4
+    },
+    {
+      "token": "mb-[16px]",
+      "count": 3
+    },
+    {
+      "token": "mt-4",
+      "count": 3
+    },
+    {
+      "token": "ml-4",
+      "count": 3
+    },
+    {
+      "token": "ml-12px",
+      "count": 3
+    },
+    {
+      "token": "text-[var(--el-color-error)]",
+      "count": 3
+    },
+    {
+      "token": "bg-black",
+      "count": 3
+    },
+    {
+      "token": "text-lg",
+      "count": 3
+    },
+    {
+      "token": "mb-[20px]",
+      "count": 3
+    },
+    {
+      "token": "mx-[12px]",
+      "count": 3
+    },
+    {
+      "token": "container",
+      "count": 3
+    },
+    {
+      "token": "leading-[18px]",
+      "count": 3
+    },
+    {
+      "token": "mt-20px",
+      "count": 3
+    },
+    {
+      "token": "pt-12px",
+      "count": 3
+    },
+    {
+      "token": "ml-[12px]",
+      "count": 3
+    },
+    {
+      "token": "mr-[10px]",
+      "count": 3
+    },
+    {
+      "token": "px-20px",
+      "count": 3
+    },
+    {
+      "token": "mb-8",
+      "count": 3
+    },
+    {
+      "token": "text-[#A8ABB2]",
+      "count": 3
+    },
+    {
+      "token": "top-[2px]",
+      "count": 3
+    },
+    {
+      "token": "ml-16px",
+      "count": 3
+    },
+    {
+      "token": "mb-8px",
+      "count": 3
+    },
+    {
+      "token": "mt-16",
+      "count": 3
+    },
+    {
+      "token": "font-semibold",
+      "count": 3
+    },
+    {
+      "token": "ml-20",
+      "count": 3
+    },
+    {
+      "token": "h-50",
+      "count": 3
+    },
+    {
+      "token": "pt-0",
+      "count": 3
+    },
+    {
+      "token": "justify-end",
+      "count": 3
+    },
+    {
+      "token": "mx-6px",
+      "count": 3
+    },
+    {
+      "token": "mt-8px",
+      "count": 3
+    },
+    {
+      "token": "w-4/5",
+      "count": 3
+    },
+    {
+      "token": "mb-[8px]",
+      "count": 3
+    },
+    {
+      "token": "underline",
+      "count": 3
+    },
+    {
+      "token": "block",
+      "count": 3
+    },
+    {
+      "token": "text-[15px]",
+      "count": 3
+    },
+    {
+      "token": "my-20px",
+      "count": 3
+    },
+    {
+      "token": "mb-2",
+      "count": 3
+    },
+    {
+      "token": "hidden",
+      "count": 2
+    },
+    {
+      "token": "flex-wrap",
+      "count": 2
+    },
+    {
+      "token": "ml-6",
+      "count": 2
+    },
+    {
+      "token": "mb-10px",
+      "count": 2
+    },
+    {
+      "token": "mb-[40px]",
+      "count": 2
+    },
+    {
+      "token": "mx-4",
+      "count": 2
+    },
+    {
+      "token": "text-[#A9A9A9]",
+      "count": 2
+    },
+    {
+      "token": "text-xs",
+      "count": 2
+    },
+    {
+      "token": "pt-20",
+      "count": 2
+    },
+    {
+      "token": "pl-20px",
+      "count": 2
+    },
+    {
+      "token": "content-value",
+      "count": 2
+    },
+    {
+      "token": "h-60",
+      "count": 2
+    },
+    {
+      "token": "text-[${variables.textColorRegular}]",
+      "count": 2
+    },
+    {
+      "token": "mr-[8px]",
+      "count": 2
+    },
+    {
+      "token": "flex-nowrap",
+      "count": 2
+    },
+    {
+      "token": "ml-[4px]",
+      "count": 2
+    },
+    {
+      "token": "w-[33%]",
+      "count": 2
+    },
+    {
+      "token": "pb-2.5",
+      "count": 2
+    },
+    {
+      "token": "px-5",
+      "count": 2
+    },
+    {
+      "token": "gap-2",
+      "count": 2
+    },
+    {
+      "token": "py-5",
+      "count": 2
+    },
+    {
+      "token": "m-0",
+      "count": 2
+    },
+    {
+      "token": "space-y-5",
+      "count": 2
+    },
+    {
+      "token": "mt-[4px]",
+      "count": 2
+    },
+    {
+      "token": "mt-[6px]",
+      "count": 2
+    },
+    {
+      "token": "text-[var(--el-text-color-secondary)]",
+      "count": 2
+    },
+    {
+      "token": "text-[12px]",
+      "count": 2
+    },
+    {
+      "token": "mr-[5px]",
+      "count": 2
+    },
+    {
+      "token": "mt-[2px]",
+      "count": 2
+    },
+    {
+      "token": "pb-[60px]",
+      "count": 2
+    },
+    {
+      "token": "fixed",
+      "count": 2
+    },
+    {
+      "token": "bottom-0",
+      "count": 2
+    },
+    {
+      "token": "left-[0px]",
+      "count": 2
+    },
+    {
+      "token": "right-0",
+      "count": 2
+    },
+    {
+      "token": "bg-white",
+      "count": 2
+    },
+    {
+      "token": "shadow-[0px_-3px_4px_0px_rgba(0,0,0,0.08)]",
+      "count": 2
+    },
+    {
+      "token": "z-50",
+      "count": 2
+    },
+    {
+      "token": "px-6",
+      "count": 2
+    },
+    {
+      "token": "py-3",
+      "count": 2
+    },
+    {
+      "token": "gap-3",
+      "count": 2
+    },
+    {
+      "token": "mx-auto",
+      "count": 2
+    },
+    {
+      "token": "px-[24px]",
+      "count": 2
+    },
+    {
+      "token": "mb-32px",
+      "count": 2
+    },
+    {
+      "token": "pt-20px",
+      "count": 2
+    },
+    {
+      "token": "h-100px",
+      "count": 2
+    },
+    {
+      "token": "rounded-[4px]",
+      "count": 2
+    },
+    {
+      "token": "absolute",
+      "count": 2
+    },
+    {
+      "token": "text-[20px]",
+      "count": 2
+    },
+    {
+      "token": "leading-[28px]",
+      "count": 2
+    },
+    {
+      "token": "text-[#DA0016]",
+      "count": 2
+    },
+    {
+      "token": "mr-2px",
+      "count": 2
+    },
+    {
+      "token": "text-[#909399]",
+      "count": 2
+    },
+    {
+      "token": "mr-3",
+      "count": 2
+    },
+    {
+      "token": "p-0",
+      "count": 2
+    },
+    {
+      "token": "text-13px",
+      "count": 2
+    },
+    {
+      "token": "pb-4px",
+      "count": 2
+    },
+    {
+      "token": "ml-12",
+      "count": 2
+    },
+    {
+      "token": "min-w-100",
+      "count": 2
+    },
+    {
+      "token": "mb-16",
+      "count": 2
+    },
+    {
+      "token": "mr-12",
+      "count": 2
+    },
+    {
+      "token": "select-text",
+      "count": 2
+    }
+  ],
+  "topRawClassTokens": [
+    {
+      "token": "w-full",
+      "count": 406
+    },
+    {
+      "token": "flex",
+      "count": 194
+    },
+    {
+      "token": "page-cont",
+      "count": 178
+    },
+    {
+      "token": "content",
+      "count": 152
+    },
+    {
+      "token": "font-color",
+      "count": 128
+    },
+    {
+      "token": "title",
+      "count": 128
+    },
+    {
+      "token": "item-box",
+      "count": 120
+    },
+    {
+      "token": "app-container",
+      "count": 103
+    },
+    {
+      "token": "form-box-self",
+      "count": 100
+    },
+    {
+      "token": "items-center",
+      "count": 95
+    },
+    {
+      "token": "mb-12px",
+      "count": 86
+    },
+    {
+      "token": "el-table__cell",
+      "count": 84
+    },
+    {
+      "token": "is-leaf",
+      "count": 83
+    },
+    {
+      "token": "cell",
+      "count": 83
+    },
+    {
+      "token": "xy-table",
+      "count": 78
+    },
+    {
+      "token": "dialog-footer",
+      "count": 76
+    },
+    {
+      "token": "question",
+      "count": 64
+    },
+    {
+      "token": "font-bold",
+      "count": 63
+    },
+    {
+      "token": ":",
+      "count": 61
+    },
+    {
+      "token": "detail",
+      "count": 59
+    },
+    {
+      "token": "?",
+      "count": 54
+    },
+    {
+      "token": "info-value",
+      "count": 52
+    },
+    {
+      "token": "info-label",
+      "count": 50
+    },
+    {
+      "token": "item-info",
+      "count": 47
+    },
+    {
+      "token": "text-sm",
+      "count": 45
+    },
+    {
+      "token": "handle-self",
+      "count": 44
+    },
+    {
+      "token": "no-prefix-icon",
+      "count": 36
+    },
+    {
+      "token": "text-info",
+      "count": 34
+    },
+    {
+      "token": "info-content",
+      "count": 33
+    },
+    {
+      "token": "ml-4px",
+      "count": 32
+    },
+    {
+      "token": "link-type",
+      "count": 32
+    },
+    {
+      "token": "text-[#303133]",
+      "count": 32
+    },
+    {
+      "token": "''",
+      "count": 30
+    },
+    {
+      "token": "mt-16px",
+      "count": 30
+    },
+    {
+      "token": "mr-6",
+      "count": 28
+    },
+    {
+      "token": "link-btn",
+      "count": 28
+    },
+    {
+      "token": "el-upload__text",
+      "count": 28
+    },
+    {
+      "token": "===",
+      "count": 26
+    },
+    {
+      "token": "el-icon--upload",
+      "count": 25
+    },
+    {
+      "token": "mt-10",
+      "count": 25
+    },
+    {
+      "token": "text-24px",
+      "count": 25
+    },
+    {
+      "token": "items-start",
+      "count": 25
+    },
+    {
+      "token": "text-center",
+      "count": 24
+    },
+    {
+      "token": "text-[14px]",
+      "count": 23
+    },
+    {
+      "token": "text-14",
+      "count": 23
+    },
+    {
+      "token": "pt-2px",
+      "count": 23
+    },
+    {
+      "token": "mb-0",
+      "count": 22
+    },
+    {
+      "token": "flex-col",
+      "count": 21
+    },
+    {
+      "token": "text-[#606266]",
+      "count": 21
+    },
+    {
+      "token": "longer-tooltip",
+      "count": 20
+    },
+    {
+      "token": "justify-between",
+      "count": 19
+    },
+    {
+      "token": "text-red",
+      "count": 19
+    },
+    {
+      "token": "mt-[8px]",
+      "count": 19
+    },
+    {
+      "token": "pr-4",
+      "count": 19
+    },
+    {
+      "token": "el-upload__tip",
+      "count": 18
+    },
+    {
+      "token": "whitespace-nowrap",
+      "count": 18
+    },
+    {
+      "token": "text-base",
+      "count": 18
+    },
+    {
+      "token": "conversion-info",
+      "count": 18
+    },
+    {
+      "token": "mb-10",
+      "count": 17
+    },
+    {
+      "token": "text-18px",
+      "count": 17
+    },
+    {
+      "token": "empty-text",
+      "count": 16
+    },
+    {
+      "token": "cursor-pointer",
+      "count": 16
+    },
+    {
+      "token": "page-title",
+      "count": 16
+    },
+    {
+      "token": "mr-12px",
+      "count": 15
+    },
+    {
+      "token": "text-[var(--el-text-color-primary)]",
+      "count": 15
+    },
+    {
+      "token": "['color-tag',",
+      "count": 14
+    },
+    {
+      "token": "'color-'",
+      "count": 14
+    },
+    {
+      "token": "+",
+      "count": 14
+    },
+    {
+      "token": "custom-table",
+      "count": 14
+    },
+    {
+      "token": "justify-center",
+      "count": 14
+    },
+    {
+      "token": "table-label",
+      "count": 14
+    },
+    {
+      "token": "w-[50px]",
+      "count": 13
+    },
+    {
+      "token": "h-[50px]",
+      "count": 13
+    },
+    {
+      "token": "inline-block",
+      "count": 13
+    },
+    {
+      "token": "leading-[22px]",
+      "count": 13
+    },
+    {
+      "token": "info-title",
+      "count": 13
+    },
+    {
+      "token": "$i18n.locale",
+      "count": 12
+    },
+    {
+      "token": ">",
+      "count": 12
+    },
+    {
+      "token": "bg-black",
+      "count": 12
+    },
+    {
+      "token": "min-w-0",
+      "count": 12
+    },
+    {
+      "token": "font-700",
+      "count": 12
+    },
+    {
+      "token": "resize-none",
+      "count": 12
+    },
+    {
+      "token": "item",
+      "count": 11
+    },
+    {
+      "token": "mr-10",
+      "count": 11
+    },
+    {
+      "token": "break-all",
+      "count": 11
+    },
+    {
+      "token": "mr-4",
+      "count": 11
+    },
+    {
+      "token": "add-btn",
+      "count": 11
+    },
+    {
+      "token": "tooltip",
+      "count": 11
+    },
+    {
+      "token": "flex-baseline",
+      "count": 11
+    },
+    {
+      "token": "el-input__icon",
+      "count": 10
+    },
+    {
+      "token": "el-icon--right",
+      "count": 10
+    },
+    {
+      "token": "!==",
+      "count": 10
+    },
+    {
+      "token": "mt-12",
+      "count": 10
+    },
+    {
+      "token": "text-[13px]",
+      "count": 10
+    },
+    {
+      "token": "ml-10",
+      "count": 10
+    },
+    {
+      "token": "flex-1",
+      "count": 10
+    },
+    {
+      "token": "m-0",
+      "count": 10
+    },
+    {
+      "token": "'line-through",
+      "count": 10
+    },
+    {
+      "token": "el-icon-question",
+      "count": 10
+    },
+    {
+      "token": "delete-btn",
+      "count": 10
+    },
+    {
+      "token": "icon-style",
+      "count": 10
+    },
+    {
+      "token": "d-flex",
+      "count": 10
+    },
+    {
+      "token": "&&",
+      "count": 9
+    },
+    {
+      "token": "pb-0",
+      "count": 9
+    },
+    {
+      "token": "gap-2",
+      "count": 9
+    },
+    {
+      "token": "]",
+      "count": 9
+    },
+    {
+      "token": "mr-4px",
+      "count": 9
+    },
+    {
+      "token": "custom-style",
+      "count": 9
+    },
+    {
+      "token": "bottom-1px",
+      "count": 9
+    },
+    {
+      "token": "text-red-500",
+      "count": 8
+    },
+    {
+      "token": "dialog",
+      "count": 8
+    },
+    {
+      "token": "mb-20",
+      "count": 8
+    },
+    {
+      "token": "left-title",
+      "count": 8
+    },
+    {
+      "token": "affix-bar",
+      "count": 8
+    },
+    {
+      "token": "text-[#2F8DF0]",
+      "count": 8
+    },
+    {
+      "token": "text-[${variables.textColorPrimary}]",
+      "count": 8
+    },
+    {
+      "token": "truncate",
+      "count": 8
+    },
+    {
+      "token": "section-title",
+      "count": 8
+    },
+    {
+      "token": "[",
+      "count": 8
+    },
+    {
+      "token": "mr-8px",
+      "count": 8
+    },
+    {
+      "token": "approval-status",
+      "count": 8
+    },
+    {
+      "token": "detail-title",
+      "count": 8
+    },
+    {
+      "token": "mb-20px",
+      "count": 8
+    },
+    {
+      "token": "h-40",
+      "count": 8
+    },
+    {
+      "token": "text-h2",
+      "count": 8
+    },
+    {
+      "token": "text-h3",
+      "count": 8
+    },
+    {
+      "token": "card-box",
+      "count": 8
+    },
+    {
+      "token": "el-table",
+      "count": 8
+    },
+    {
+      "token": "el-table--enable-row-hover",
+      "count": 8
+    },
+    {
+      "token": "el-table--medium",
+      "count": 8
+    },
+    {
+      "token": "w-2/3",
+      "count": 8
+    },
+    {
+      "token": "required-field",
+      "count": 8
+    },
+    {
+      "token": "btn-group",
+      "count": 8
+    },
+    {
+      "token": "mt-4",
+      "count": 7
+    },
+    {
+      "token": "pt-8px",
+      "count": 7
+    },
+    {
+      "token": "button-container",
+      "count": 7
+    },
+    {
+      "token": "w-60",
+      "count": 7
+    },
+    {
+      "token": "leading-[26px]",
+      "count": 7
+    },
+    {
+      "token": "mr-[10px]",
+      "count": 7
+    },
+    {
+      "token": "tree-select-custom",
+      "count": 7
+    },
+    {
+      "token": "relative",
+      "count": 7
+    },
+    {
+      "token": "min-w-100",
+      "count": 7
+    },
+    {
+      "token": "card-shadow",
+      "count": 7
+    },
+    {
+      "token": "img-show",
+      "count": 7
+    },
+    {
+      "token": "input-icon",
+      "count": 7
+    },
+    {
+      "token": "w-400",
+      "count": 7
+    },
+    {
+      "token": "drawer-item",
+      "count": 6
+    },
+    {
+      "token": "comp-style",
+      "count": 6
+    },
+    {
+      "token": "1",
+      "count": 6
+    },
+    {
+      "token": "text-gray",
+      "count": 6
+    },
+    {
+      "token": "text-left",
+      "count": 6
+    },
+    {
+      "token": "small-title",
+      "count": 6
+    },
+    {
+      "token": "text-[18px]",
+      "count": 6
+    },
+    {
+      "token": "whitespace-pre-line",
+      "count": 6
+    },
+    {
+      "token": "index",
+      "count": 6
+    },
+    {
+      "token": "break-words",
+      "count": 6
+    },
+    {
+      "token": "mb-4px",
+      "count": 6
+    },
+    {
+      "token": "basic-info-item",
+      "count": 6
+    },
+    {
+      "token": "basic-info-item-label",
+      "count": 6
+    },
+    {
+      "token": "basic-info-item-value",
+      "count": 6
+    },
+    {
+      "token": "info-container",
+      "count": 6
+    },
+    {
+      "token": "text-style",
+      "count": 6
+    },
+    {
+      "token": "ml-12",
+      "count": 6
+    },
+    {
+      "token": "isZh",
+      "count": 6
+    },
+    {
+      "token": "frame",
+      "count": 6
+    },
+    {
+      "token": "text-12",
+      "count": 6
+    },
+    {
+      "token": "card-header",
+      "count": 6
+    },
+    {
+      "token": "font-semibold",
+      "count": 6
+    },
+    {
+      "token": "w-3/5",
+      "count": 6
+    },
+    {
+      "token": "[generateClass(),",
+      "count": 6
+    },
+    {
+      "token": "errorFields[`specs_${scope.$index}`]",
+      "count": 6
+    },
+    {
+      "token": "'error-input'",
+      "count": 6
+    },
+    {
+      "token": "'']",
+      "count": 6
+    },
+    {
+      "token": "custom-width",
+      "count": 6
+    },
+    {
+      "token": "steps",
+      "count": 6
+    },
+    {
+      "token": "double-input",
+      "count": 6
+    },
+    {
+      "token": "block",
+      "count": 6
+    },
+    {
+      "token": "font-extralight",
+      "count": 6
+    },
+    {
+      "token": "leading-[32px]",
+      "count": 6
+    },
+    {
+      "token": "list-group-item",
+      "count": 6
+    },
+    {
+      "token": "mr5",
+      "count": 6
+    },
+    {
+      "token": "pull-right",
+      "count": 6
+    },
+    {
+      "token": "text-zinc-400",
+      "count": 5
+    },
+    {
+      "token": "icon-color",
+      "count": 5
+    },
+    {
+      "token": "drawer-switch",
+      "count": 5
+    },
+    {
+      "token": "||",
+      "count": 5
+    },
+    {
+      "token": "ml-6px",
+      "count": 5
+    },
+    {
+      "token": "mt-12px",
+      "count": 5
+    },
+    {
+      "token": "mb-[12px]",
+      "count": 5
+    },
+    {
+      "token": "mt-[12px]",
+      "count": 5
+    },
+    {
+      "token": "text-[var(--el-color-info)]'",
+      "count": 5
+    },
+    {
+      "token": "({",
+      "count": 5
+    },
+    {
+      "token": "mr-20",
+      "count": 5
+    },
+    {
+      "token": "text-[#909399]",
+      "count": 5
+    },
+    {
+      "token": "approval-icon",
+      "count": 5
+    },
+    {
+      "token": "template",
+      "count": 5
+    },
+    {
+      "token": "box-item",
+      "count": 5
+    },
+    {
+      "token": "no-word-break",
+      "count": 5
+    },
+    {
+      "token": "button-box",
+      "count": 5
+    },
+    {
+      "token": "flex-between",
+      "count": 5
+    }
+  ],
+  "ignoredTokens": [
+    {
+      "token": "app-container",
+      "count": 103
+    },
+    {
+      "token": "page-cont",
+      "count": 101
+    },
+    {
+      "token": "form-box-self",
+      "count": 81
+    },
+    {
+      "token": "dialog-footer",
+      "count": 73
+    },
+    {
+      "token": ":",
+      "count": 66
+    },
+    {
+      "token": "xy-table",
+      "count": 62
+    },
+    {
+      "token": "handle-self",
+      "count": 46
+    },
+    {
+      "token": "detail",
+      "count": 37
+    },
+    {
+      "token": "question",
+      "count": 35
+    },
+    {
+      "token": "?",
+      "count": 32
+    },
+    {
+      "token": "info-content",
+      "count": 31
+    },
+    {
+      "token": "no-prefix-icon",
+      "count": 24
+    },
+    {
+      "token": "el-icon--upload",
+      "count": 21
+    },
+    {
+      "token": "el-upload__text",
+      "count": 21
+    },
+    {
+      "token": "===",
+      "count": 20
+    },
+    {
+      "token": "]",
+      "count": 19
+    },
+    {
+      "token": "content",
+      "count": 18
+    },
+    {
+      "token": "link-type",
+      "count": 17
+    },
+    {
+      "token": "page-title",
+      "count": 16
+    },
+    {
+      "token": "el-upload__tip",
+      "count": 14
+    },
+    {
+      "token": "title",
+      "count": 14
+    },
+    {
+      "token": "text-red",
+      "count": 12
+    },
+    {
+      "token": "['color-tag',",
+      "count": 12
+    },
+    {
+      "token": "color-",
+      "count": 12
+    },
+    {
+      "token": "+",
+      "count": 12
+    },
+    {
+      "token": "font-color",
+      "count": 11
+    },
+    {
+      "token": "info-title",
+      "count": 11
+    },
+    {
+      "token": "link-btn",
+      "count": 10
+    },
+    {
+      "token": ",",
+      "count": 10
+    },
+    {
+      "token": "add-btn",
+      "count": 10
+    },
+    {
+      "token": "delete-btn",
+      "count": 9
+    },
+    {
+      "token": "empty-text",
+      "count": 8
+    },
+    {
+      "token": "el-icon--right",
+      "count": 8
+    },
+    {
+      "token": "$i18n.locale",
+      "count": 8
+    },
+    {
+      "token": "!==",
+      "count": 8
+    },
+    {
+      "token": "&&",
+      "count": 8
+    },
+    {
+      "token": "dialog",
+      "count": 8
+    },
+    {
+      "token": "affix-bar",
+      "count": 8
+    },
+    {
+      "token": "custom-table",
+      "count": 8
+    },
+    {
+      "token": "text-h2",
+      "count": 8
+    },
+    {
+      "token": ">",
+      "count": 7
+    },
+    {
+      "token": "button-container",
+      "count": 7
+    },
+    {
+      "token": "index",
+      "count": 7
+    },
+    {
+      "token": "tree-select-custom",
+      "count": 7
+    },
+    {
+      "token": "longer-tooltip",
+      "count": 7
+    },
+    {
+      "token": "item-box",
+      "count": 7
+    },
+    {
+      "token": "left-title",
+      "count": 6
+    },
+    {
+      "token": "text-style",
+      "count": 6
+    },
+    {
+      "token": "item",
+      "count": 5
+    },
+    {
+      "token": "text-gray",
+      "count": 5
+    },
+    {
+      "token": "template",
+      "count": 5
+    },
+    {
+      "token": "button-box",
+      "count": 5
+    },
+    {
+      "token": "flex-baseline",
+      "count": 5
+    },
+    {
+      "token": "btn-group",
+      "count": 5
+    },
+    {
+      "token": "el-input__icon",
+      "count": 4
+    },
+    {
+      "token": "||",
+      "count": 4
+    },
+    {
+      "token": "error-title",
+      "count": 4
+    },
+    {
+      "token": "header-box",
+      "count": 4
+    },
+    {
+      "token": "[",
+      "count": 4
+    },
+    {
+      "token": "demo-tabs",
+      "count": 4
+    },
+    {
+      "token": "warning-icon",
+      "count": 4
+    },
+    {
+      "token": "info-container",
+      "count": 4
+    },
+    {
+      "token": "basic-info",
+      "count": 4
+    },
+    {
+      "token": "upload-demo",
+      "count": 4
+    },
+    {
+      "token": "box-item",
+      "count": 4
+    },
+    {
+      "token": "title-container",
+      "count": 4
+    },
+    {
+      "token": "tips-container",
+      "count": 4
+    },
+    {
+      "token": "box-card",
+      "count": 4
+    },
+    {
+      "token": "add-product-style",
+      "count": 4
+    },
+    {
+      "token": "add-form",
+      "count": 4
+    },
+    {
+      "token": "en",
+      "count": 4
+    },
+    {
+      "token": "text-primary-btn",
+      "count": 4
+    },
+    {
+      "token": "active",
+      "count": 3
+    },
+    {
+      "token": "3",
+      "count": 3
+    },
+    {
+      "token": "text",
+      "count": 3
+    },
+    {
+      "token": "1",
+      "count": 3
+    },
+    {
+      "token": "total-count",
+      "count": 3
+    },
+    {
+      "token": "success-count-error",
+      "count": 3
+    },
+    {
+      "token": "success-count",
+      "count": 3
+    },
+    {
+      "token": "primary",
+      "count": 3
+    },
+    {
+      "token": "danger",
+      "count": 3
+    },
+    {
+      "token": "operation-log-container",
+      "count": 3
+    },
+    {
+      "token": "page-content",
+      "count": 3
+    },
+    {
+      "token": "product-info-review",
+      "count": 3
+    },
+    {
+      "token": "-",
+      "count": 3
+    },
+    {
+      "token": "({)",
+      "count": 3
+    },
+    {
+      "token": "approval-title",
+      "count": 3
+    },
+    {
+      "token": "info-label",
+      "count": 3
+    },
+    {
+      "token": "info-value",
+      "count": 3
+    },
+    {
+      "token": "tip-style",
+      "count": 3
+    },
+    {
+      "token": "detail-title",
+      "count": 3
+    },
+    {
+      "token": "no-word-break",
+      "count": 3
+    },
+    {
+      "token": "row.status",
+      "count": 3
+    },
+    {
+      "token": "isZh",
+      "count": 3
+    },
+    {
+      "token": "upload-wrapper",
+      "count": 3
+    },
+    {
+      "token": "has-file",
+      "count": 3
+    },
+    {
+      "token": "{",
+      "count": 3
+    },
+    {
+      "token": "frame",
+      "count": 3
+    },
+    {
+      "token": "select-container",
+      "count": 3
+    },
+    {
+      "token": "dialog-body",
+      "count": 3
+    },
+    {
+      "token": "upload-container",
+      "count": 3
+    },
+    {
+      "token": "card-shadow",
+      "count": 3
+    },
+    {
+      "token": "img-show",
+      "count": 3
+    },
+    {
+      "token": "user",
+      "count": 3
+    },
+    {
+      "token": "el-icon-question",
+      "count": 3
+    },
+    {
+      "token": "break-word",
+      "count": 3
+    },
+    {
+      "token": "card-header",
+      "count": 3
+    },
+    {
+      "token": "right-title",
+      "count": 3
+    },
+    {
+      "token": "zh",
+      "count": 3
+    },
+    {
+      "token": "text-hover",
+      "count": 3
+    },
+    {
+      "token": "bg-hover",
+      "count": 3
+    },
+    {
+      "token": "tip-box",
+      "count": 3
+    },
+    {
+      "token": "conversion-info",
+      "count": 3
+    },
+    {
+      "token": "basic-info-form",
+      "count": 3
+    },
+    {
+      "token": "custom-upload",
+      "count": 3
+    },
+    {
+      "token": "complex-icon",
+      "count": 3
+    },
+    {
+      "token": "ship-dialog-style",
+      "count": 3
+    },
+    {
+      "token": "icon-style",
+      "count": 3
+    },
+    {
+      "token": "tooltip",
+      "count": 3
+    },
+    {
+      "token": "color-tag",
+      "count": 3
+    },
+    {
+      "token": "line-break",
+      "count": 3
+    },
+    {
+      "token": "table-label",
+      "count": 3
+    },
+    {
+      "token": "purchase-user",
+      "count": 3
+    },
+    {
+      "token": "el-icon-search",
+      "count": 2
+    },
+    {
+      "token": "fileList.length",
+      "count": 2
+    },
+    {
+      "token": ">=",
+      "count": 2
+    },
+    {
+      "token": "el-dropdown-link",
+      "count": 2
+    },
+    {
+      "token": "-1",
+      "count": 2
+    },
+    {
+      "token": "formList.length",
+      "count": 2
+    },
+    {
+      "token": "display-contents",
+      "count": 2
+    },
+    {
+      "token": "item.meta.icon",
+      "count": 2
+    },
+    {
+      "token": "video-action",
+      "count": 2
+    },
+    {
+      "token": "video-control-icon",
+      "count": 2
+    },
+    {
+      "token": "video-control",
+      "count": 2
+    },
+    {
+      "token": "img-action",
+      "count": 2
+    },
+    {
+      "token": "icon-color",
+      "count": 2
+    },
+    {
+      "token": "badge-one",
+      "count": 2
+    },
+    {
+      "token": "<=",
+      "count": 2
+    },
+    {
+      "token": "9,",
+      "count": 2
+    },
+    {
+      "token": "badge-multi",
+      "count": 2
+    },
+    {
+      "token": "99",
+      "count": 2
+    },
+    {
+      "token": "tags-view-wrapper",
+      "count": 2
+    },
+    {
+      "token": "tags-view-item",
+      "count": 2
+    },
+    {
+      "token": "el-icon-close",
+      "count": 2
+    },
+    {
+      "token": "break-tip",
+      "count": 2
+    },
+    {
+      "token": "text-down",
+      "count": 2
+    },
+    {
+      "token": "page-desc",
+      "count": 2
+    },
+    {
+      "token": "custom-color",
+      "count": 2
+    },
+    {
+      "token": "custom-strike",
+      "count": 2
+    },
+    {
+      "token": "empty-info",
+      "count": 2
+    },
+    {
+      "token": "tab-content",
+      "count": 2
+    },
+    {
+      "token": "small-title",
+      "count": 2
+    },
+    {
+      "token": "section-title",
+      "count": 2
+    },
+    {
+      "token": "compareFields?.status?.isChange",
+      "count": 2
+    },
+    {
+      "token": "compareFields?.applicableScenario?.isChange",
+      "count": 2
+    },
+    {
+      "token": "audit-table",
+      "count": 2
+    },
+    {
+      "token": "delete",
+      "count": 2
+    },
+    {
+      "token": "fixed-bottom-actions",
+      "count": 2
+    },
+    {
+      "token": "img-wrap",
+      "count": 2
+    },
+    {
+      "token": "country-tag",
+      "count": 2
+    },
+    {
+      "token": "increase",
+      "count": 2
+    },
+    {
+      "token": "approval-one",
+      "count": 2
+    },
+    {
+      "token": "success-icon",
+      "count": 2
+    },
+    {
+      "token": "danger-icon",
+      "count": 2
+    },
+    {
+      "token": "first-one",
+      "count": 2
+    },
+    {
+      "token": "header",
+      "count": 2
+    },
+    {
+      "token": "flex-start",
+      "count": 2
+    },
+    {
+      "token": "({",
+      "count": 2
+    },
+    {
+      "token": "status-tabs",
+      "count": 2
+    },
+    {
+      "token": "flex-center",
+      "count": 2
+    },
+    {
+      "token": "result",
+      "count": 2
+    },
+    {
+      "token": "dialog-content",
+      "count": 2
+    },
+    {
+      "token": "table-container",
+      "count": 2
+    },
+    {
+      "token": "header-item",
+      "count": 2
+    },
+    {
+      "token": "date-picker-wrap",
+      "count": 2
+    },
+    {
+      "token": "mt10",
+      "count": 2
+    },
+    {
+      "token": "mb10",
+      "count": 2
+    },
+    {
+      "token": "text-color",
+      "count": 2
+    },
+    {
+      "token": "align-item-center",
+      "count": 2
+    },
+    {
+      "token": "button-style",
+      "count": 2
+    },
+    {
+      "token": "queryParams.status",
+      "count": 2
+    },
+    {
+      "token": "button-color",
+      "count": 2
+    },
+    {
+      "token": "button-color-danger",
+      "count": 2
+    },
+    {
+      "token": "flex-between",
+      "count": 2
+    },
+    {
+      "token": "form-container",
+      "count": 2
+    },
+    {
+      "token": "zh-layout",
+      "count": 2
+    },
+    {
+      "token": "en-layout",
+      "count": 2
+    },
+    {
+      "token": "page-container",
+      "count": 2
+    },
+    {
+      "token": "scroll-shadow",
+      "count": 2
+    },
+    {
+      "token": "hasScrollShadow",
+      "count": 2
+    },
+    {
+      "token": "warning",
+      "count": 2
+    },
+    {
+      "token": "popover-container",
+      "count": 2
+    },
+    {
+      "token": "label-style",
+      "count": 2
+    },
+    {
+      "token": "attachFileList.length",
+      "count": 2
+    },
+    {
+      "token": "bulk-page-cont",
+      "count": 2
+    },
+    {
+      "token": "bulk-container",
+      "count": 2
+    },
+    {
+      "token": "currency-price",
+      "count": 2
+    },
+    {
+      "token": "price-range",
+      "count": 2
+    },
+    {
+      "token": "subtract",
+      "count": 2
+    },
+    {
+      "token": "audit-currency-price",
+      "count": 2
+    }
+  ]
+}
