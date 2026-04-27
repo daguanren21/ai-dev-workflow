@@ -31,7 +31,57 @@ npx skills add daguanren21/ai-dev-workflow -a claude-code
 
 安装后，AI 编码工具会自动识别并使用 dev-workflow harness 管控完整开发流程。
 
-### 2. 安装 MCP Server（可选）
+### 2. 安装到 Codex
+
+Codex 从 `$CODEX_HOME/skills` 加载 skills。未设置 `CODEX_HOME` 时，默认目录是 `~/.codex`。
+
+从当前仓库安装：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+cp -R skills/dev-workflow/* "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow/"
+```
+
+如果是在本地开发这个 skill，建议使用软链接，这样更新当前仓库后重启 Codex 即可生效：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -s "$(pwd)/skills/dev-workflow" "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+```
+
+安装或更新后需要重启 Codex。
+
+### 3. 触发 Harness
+
+当任务看起来是 AI 辅助开发工作时，skill 可以自动触发，例如：需求接入、issue 实现、任务规划、门禁执行、验证、审查或交付。
+
+也可以显式触发：
+
+```text
+使用 dev-workflow harness 实现这个需求：<需求文本或工单号>
+```
+
+```text
+使用 dev-workflow harness。读取 ONES-123，先写计划，确认后再实现。
+```
+
+```text
+使用 dev-workflow harness 处理这个 GitHub issue：<issue url>
+```
+
+Harness 生效时，agent 应该先声明：
+
+```text
+I'm using the dev-workflow harness to drive this development task.
+```
+
+预期流程：
+
+```text
+需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
+```
+
+### 4. 安装 MCP Server（可选）
 
 如果使用 ONES 进行需求管理：
 
@@ -75,7 +125,7 @@ npm install -g ai-dev-requirements
 }
 ```
 
-### 3. 搭配其他 MCP Server（可选）
+### 5. 搭配其他 MCP Server（可选）
 
 需求不限于 ONES，可搭配官方 MCP Server 获取 GitHub / Jira / Figma 资源：
 

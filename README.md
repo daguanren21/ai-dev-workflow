@@ -31,7 +31,57 @@ npx skills add daguanren21/ai-dev-workflow -a claude-code
 
 Once installed, AI coding tools will automatically use the dev-workflow harness to govern the full development process.
 
-### 2. Install MCP Server (Optional)
+### 2. Install For Codex
+
+Codex loads skills from `$CODEX_HOME/skills`. If `CODEX_HOME` is not set, the default is `~/.codex`.
+
+From this repository:
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+cp -R skills/dev-workflow/* "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow/"
+```
+
+For local development, use a symlink instead so Codex picks up edits from this checkout after restart:
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -s "$(pwd)/skills/dev-workflow" "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+```
+
+Restart Codex after installing or updating the skill.
+
+### 3. Trigger The Harness
+
+The skill can be triggered automatically when the task looks like AI-assisted development work: requirement intake, issue implementation, task planning, gated execution, verification, review, or handoff.
+
+You can also trigger it explicitly:
+
+```text
+Use the dev-workflow harness to implement this requirement: <requirement text or ticket id>
+```
+
+```text
+Use the dev-workflow harness. Read ONES-123, write the plan first, then wait for confirmation before implementation.
+```
+
+```text
+Use the dev-workflow harness for this GitHub issue: <issue url>
+```
+
+When the harness is active, the agent should announce:
+
+```text
+I'm using the dev-workflow harness to drive this development task.
+```
+
+Expected flow:
+
+```text
+Intake -> Context Load -> Normalize -> Harness Plan -> Coverage Validation -> Gated Execution -> Verification -> Review -> Handoff
+```
+
+### 4. Install MCP Server (Optional)
 
 If you use ONES for requirement management:
 
@@ -75,7 +125,7 @@ Add to your `.mcp.json`:
 }
 ```
 
-### 3. Add Companion MCP Servers (Optional)
+### 5. Add Companion MCP Servers (Optional)
 
 Requirements are not limited to ONES. Pair with official MCP servers for GitHub / Jira / Figma:
 
