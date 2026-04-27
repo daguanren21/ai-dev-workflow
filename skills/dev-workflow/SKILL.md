@@ -52,6 +52,8 @@ AI agent harness for requirement-driven software work. The harness controls what
 
 **Core principle:** Harness first. Normalize inputs, create traceable artifacts, validate coverage, execute behind gates, and hand off evidence. Do not jump from a requirement directly to code.
 
+**Default execution policy:** When this harness is triggered, the agent must produce user stories and an implementation plan before writing code, then pause for developer confirmation. The developer does not need to say "write the plan first" every time. Only skip this gate when the developer explicitly says to bypass planning or directly start implementation.
+
 ## Harness Engineering Principles
 
 - Treat the harness as feedforward guidance plus feedback sensors, not just a checklist.
@@ -117,7 +119,7 @@ For detailed operating rules, use `references/workflow.md`, `references/task-typ
 
 **Output:** `docs/plans/{feature-name}/implementation-plan.md`.
 
-**Pause:** follow the planning tool or team gate. If no explicit gate exists, pause before implementation when the plan changes scope or risk.
+**Pause:** always before implementation. Present the implementation plan and wait for developer confirmation unless the developer explicitly bypassed the planning gate.
 
 ### Phase 5: Validate Coverage
 

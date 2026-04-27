@@ -75,6 +75,8 @@ Harness 生效时，agent 应该先声明：
 I'm using the dev-workflow harness to drive this development task.
 ```
 
+默认情况下，harness 会先生成 user stories 和 implementation plan，然后暂停等待确认，再开始写代码。你不需要每次重复“先写计划再实现”。只有想跳过这个门禁时，才需要明确说明。
+
 预期流程：
 
 ```text

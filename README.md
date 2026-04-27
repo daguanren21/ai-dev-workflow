@@ -75,6 +75,8 @@ When the harness is active, the agent should announce:
 I'm using the dev-workflow harness to drive this development task.
 ```
 
+By default, the harness generates user stories and an implementation plan before writing code, then pauses for confirmation. You do not need to repeat "write the plan first" in every prompt. Say so only when you want to bypass that gate.
+
 Expected flow:
 
 ```text

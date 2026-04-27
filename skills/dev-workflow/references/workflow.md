@@ -70,6 +70,28 @@ docs/plans/{feature-name}/ui-references/
 | 8 | Review | Yes | Review notes and risk list | On blocking finding |
 | 9 | Handoff | Yes | `handoff.md` or final response | No |
 
+## Default Execution Policy
+
+When the dev-workflow harness is active, planning is the default. The developer does not need to repeat "generate user stories and an implementation plan before coding."
+
+Default behavior:
+
+- Normalize raw context into user stories.
+- Pause for developer confirmation after user stories.
+- Generate an implementation plan.
+- Pause for developer confirmation before implementation.
+- Start coding only after confirmation, or when the developer explicitly bypasses the planning gate.
+
+Explicit bypass examples:
+
+```text
+Use dev-workflow harness, but skip the planning gate and directly implement this small docs change.
+```
+
+```text
+直接开写，不需要等我确认计划。
+```
+
 ## Blueprint Model
 
 The harness is a hybrid Blueprint: deterministic nodes handle repeatable control flow, while agent-loop nodes handle reasoning and repair.
@@ -156,6 +178,8 @@ The plan turns user stories into a task graph. Every task records:
 - Review level.
 
 Use `task-types.md` for valid task types and scheduling rules. Use the templates directory for task declarations.
+
+The harness pauses after the plan. This pause is mandatory by default because it is the final point where the developer can adjust scope, task boundaries, verification gates, and risk before code changes begin.
 
 ### 5. Coverage Validation
 
