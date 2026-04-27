@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-一套面向 AI 编码工具的并行任务开发框架，实现端到端的开发工作流自动化。
+一套面向 AI 编码工具的 agent harness 工作流，用于管控需求接入、计划、门禁执行、验证、审查和交付。
 
 ---
 
@@ -11,13 +11,13 @@
 | 交付物 | 说明 |
 |-------|------|
 | **Requirements MCP Server** (`src/`) | 需求获取 MCP 服务，内置 ONES 适配器，可通过 npm 安装 |
-| **Dev Workflow Skill** (`skills/dev-workflow/`) | 自包含的开发工作流 Skill，安装后即可跑通完整流程 |
+| **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | 自包含的 AI agent harness 工作流 Skill，安装后即可跑通需求接入、计划、门禁执行、验证、审查和交付。 |
 
 ---
 
 ## 快速开始
 
-### 1. 安装 Dev Workflow Skill
+### 1. 安装 Agent Harness Workflow Skill
 
 ```bash
 npx skills add daguanren21/ai-dev-workflow
@@ -29,9 +29,61 @@ npx skills add daguanren21/ai-dev-workflow
 npx skills add daguanren21/ai-dev-workflow -a claude-code
 ```
 
-安装后，AI 编码工具会自动识别并使用 dev-workflow skill 驱动完整的开发流程。
+安装后，AI 编码工具会自动识别并使用 dev-workflow harness 管控完整开发流程。
 
-### 2. 安装 MCP Server（可选）
+### 2. 安装到 Codex
+
+Codex 从 `$CODEX_HOME/skills` 加载 skills。未设置 `CODEX_HOME` 时，默认目录是 `~/.codex`。
+
+从当前仓库安装：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+cp -R skills/dev-workflow/* "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow/"
+```
+
+如果是在本地开发这个 skill，建议使用软链接，这样更新当前仓库后重启 Codex 即可生效：
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -s "$(pwd)/skills/dev-workflow" "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+```
+
+安装或更新后需要重启 Codex。
+
+### 3. 触发 Harness
+
+当任务看起来是 AI 辅助开发工作时，skill 可以自动触发，例如：需求接入、issue 实现、任务规划、门禁执行、验证、审查或交付。
+
+也可以显式触发：
+
+```text
+使用 dev-workflow harness 实现这个需求：<需求文本或工单号>
+```
+
+```text
+使用 dev-workflow harness。读取 ONES-123，先写计划，确认后再实现。
+```
+
+```text
+使用 dev-workflow harness 处理这个 GitHub issue：<issue url>
+```
+
+Harness 生效时，agent 应该先声明：
+
+```text
+I'm using the dev-workflow harness to drive this development task.
+```
+
+默认情况下，harness 会先生成 user stories 和 implementation plan，然后暂停等待确认，再开始写代码。你不需要每次重复“先写计划再实现”。只有想跳过这个门禁时，才需要明确说明。
+
+预期流程：
+
+```text
+需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
+```
+
+### 4. 安装 MCP Server（可选）
 
 如果使用 ONES 进行需求管理：
 
@@ -75,7 +127,7 @@ npm install -g ai-dev-requirements
 }
 ```
 
-### 3. 搭配其他 MCP Server（可选）
+### 5. 搭配其他 MCP Server（可选）
 
 需求不限于 ONES，可搭配官方 MCP Server 获取 GitHub / Jira / Figma 资源：
 
@@ -108,22 +160,24 @@ npm install -g ai-dev-requirements
 
 ---
 
-## Dev Workflow Skill
+## Agent Harness Workflow Skill
 
-自包含的 AI 辅助开发工作流 Skill，安装后自动驱动 7 个阶段：
+自包含的 AI 辅助 agent harness 工作流 Skill，安装后自动管控完整开发生命周期：
 
 ```
-需求获取 → 用户故事 → UI 资源获取 → 技能匹配 → 实现计划 → 代码实现 → 验证
+需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
 ```
+
+这个 harness 遵循“前馈 + 反馈”模型：先用计划、产物和任务边界引导 agent，再用 lint、typecheck、build、tests、review 等确定性门禁形成反压，合格后再交付。
 
 Skill 目录结构：
 
 ```
 skills/dev-workflow/
-├── SKILL.md                         # Skill 入口（YAML frontmatter + 工作流定义）
+├── SKILL.md                         # Skill 入口（YAML frontmatter + harness 定义）
 └── references/
-    ├── workflow.md                  # 10 步端到端工作流
-    ├── task-types.md                # 任务类型、调度策略、声明语法
+    ├── workflow.md                  # Agent harness 生命周期
+    ├── task-types.md                # Harness 任务类型、调度模式、声明语法
     ├── service-transform.md         # Service 层 Transform 适配模式
     └── templates/                   # 任务声明模板
         ├── code-dev-task.md
@@ -140,10 +194,10 @@ skills/dev-workflow/
 
 ```
 ai-dev-workflow/
-├── skills/dev-workflow/             # Dev Workflow Skill（自包含工作流）
+├── skills/dev-workflow/             # Agent Harness Workflow Skill（自包含工作流）
 │   ├── SKILL.md
 │   └── references/
-│       ├── workflow.md
+│       ├── workflow.md              # Agent harness 生命周期
 │       ├── task-types.md
 │       ├── service-transform.md
 │       └── templates/

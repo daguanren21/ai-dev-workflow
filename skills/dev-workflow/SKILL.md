@@ -1,17 +1,16 @@
 ---
 name: dev-workflow
 description: >
-  Use when starting any development task - receiving a requirement ticket number, requirement description,
-  or when user says "start developing", "new feature", "implement XXX". Drives the full workflow from
-  requirement fetching through user stories, UI resource acquisition, skill matching, implementation
-  planning, coding, and verification. Supports ONES/GitHub/Jira MCP for requirements, Figma MCP for
-  design references, and npx skills find for frontend UI skills when no design is provided.
+  Use when starting any AI-assisted development task that needs a controlled agent harness:
+  requirement intake, MCP/context loading, normalization, task graph planning, gated execution,
+  verification, review, and handoff. Supports ONES/GitHub/Jira/Figma MCP as context sources,
+  but does not require changing MCP server code.
 metadata:
   author: ai-dev-workflow
   version: "0.1.0"
 ---
 
-# Dev Workflow
+# Dev Workflow Harness
 
 ## Setup
 
@@ -30,16 +29,16 @@ npx skills add daguanren21/ai-dev-workflow -a cursor
 
 **Prerequisites:**
 
-1. Install [find-skills](https://github.com/vercel-labs/skills) for community skill discovery:
+1. Optional community skill discovery:
 
 ```bash
 npx skills add vercel-labs/skills --skill find-skills -a claude-code
 ```
 
-2. (Optional) Install companion MCP servers based on your requirement source:
+2. Optional companion MCP servers based on context source:
 
 | Source | MCP Server |
-|--------|-----------|
+|--------|------------|
 | ONES | `ai-dev-requirements` (bundled) |
 | GitHub | [github/github-mcp-server](https://github.com/github/github-mcp-server) |
 | Jira | [Atlassian Rovo MCP](https://www.atlassian.com/blog/announcements/remote-mcp-server) |
@@ -47,169 +46,233 @@ npx skills add vercel-labs/skills --skill find-skills -a claude-code
 
 ## Overview
 
-Requirement-driven AI-assisted development workflow. From requirements to user stories, from user stories to implementation plans, from plans to code.
+AI agent harness for requirement-driven software work. The harness controls what context the agent may load, which artifacts it must produce, when it must pause, how tasks are scheduled, and which verification gates must pass before handoff.
 
-**Announce at start:** "I'm using the dev-workflow skill to drive the development process."
+**Announce at start:** "I'm using the dev-workflow harness to drive this development task."
 
-**Core principle:** Requirements first, then user stories, then plan, then code. Never skip to code without a confirmed user story and plan.
+**Core principle:** Harness first. Normalize inputs, create traceable artifacts, validate coverage, execute behind gates, and hand off evidence. Do not jump from a requirement directly to code.
 
-## The Process
+**Default execution policy:** When this harness is triggered, the agent must produce user stories and an implementation plan before writing code, then pause for developer confirmation. The developer does not need to say "write the plan first" every time. Only skip this gate when the developer explicitly says to bypass planning or directly start implementation.
 
-### Phase 1: Fetch Requirements
+## Harness Engineering Principles
 
-Identify the requirement source and fetch using the corresponding MCP:
+- Treat the harness as feedforward guidance plus feedback sensors, not just a checklist.
+- Keep `SKILL.md` concise; load detailed references only when needed.
+- Prefer deterministic gates for repeatable work: dependency install, lint, typecheck, build, tests, diff checks.
+- Use backpressure: successful gates stay quiet, failed gates expose precise, actionable errors.
+- Mark context source quality before planning; do not infer from blocked, login-gated, or verification-gated pages.
 
-| Source | MCP Server | Tool |
-|--------|-----------|------|
-| ONES | `requirements` MCP (bundled) | `get_requirement` |
-| GitHub | `github` MCP ([github/github-mcp-server](https://github.com/github/github-mcp-server)) | get issue |
-| Jira | `atlassian` MCP ([Atlassian Rovo MCP](https://www.atlassian.com/blog/announcements/remote-mcp-server)) | get issue |
-| Natural language | No MCP needed | Use user's description directly |
+For detailed operating rules, use `references/workflow.md`, `references/task-types.md`, and the templates under `references/templates/`.
 
-Save raw requirements to `docs/plans/{feature-name}/requirements.md`.
+## Harness Lifecycle
 
-### Phase 2: Write User Stories
+### Phase 1: Intake
 
-Convert requirements into standard user stories:
+**Input:** requirement ID, issue link, document link, Figma link, screenshot, or natural language request.
 
-```markdown
-### US-1: {title}
-**As a** {role},
-**I want** {goal},
-**So that** {value}.
+**Action:**
+- Identify the requested outcome.
+- Identify context sources: ONES, GitHub, Jira, Figma, local files, or user text.
+- Choose a stable `{feature-name}` for artifact paths.
 
-#### Acceptance Criteria
-- [ ] Given {precondition}, When {action}, Then {expected result}
+**Output:** source inventory and artifact path: `docs/plans/{feature-name}/`.
 
-#### UI Notes
-- 🎨 Figma: {link} | 🖼️ Screenshot: {path} | 📝 No UI dependency
-```
+**Pause:** only if the request has no actionable requirement or source.
 
-Rules:
-1. Each story must be independently deliverable
-2. Acceptance criteria use Given/When/Then
-3. Stories involving UI: mark and **pause** for developer to provide UI reference
-4. Non-UI stories: mark as "No UI dependency"
+### Phase 2: Context Load
 
-Save to `docs/plans/{feature-name}/user-stories.md`.
+**Input:** source inventory from intake.
 
-**PAUSE:** Present stories to developer for confirmation. Collect UI references.
+**Action:**
+- Fetch ONES requirements with the bundled Requirements MCP Server when available.
+- Fetch GitHub or Jira issue context with external MCP servers when available.
+- Fetch Figma design context with Figma MCP when UI work depends on a Figma file.
+- Use user-provided text directly when no MCP source exists.
 
-### Phase 3: Acquire UI Resources
+**Output:** `docs/plans/{feature-name}/requirements.md`.
 
-**Path A — Developer provided UI reference:**
-- **Figma copy link** → Use Figma MCP Server to read design details (components, variables, layout)
-- **Screenshot/image** → Analyze image directly for UI structure
-- **Text description** → Understand UI intent from description
+**Pause:** if required context is unavailable and cannot be replaced by user-provided text.
 
-**Path B — No UI reference provided:**
+### Phase 3: Normalize Requirements
 
-Search for frontend UI skills via `npx skills find`:
+**Input:** `requirements.md`.
 
-```bash
-npx skills find frontend design
-npx skills find ui component
-npx skills find css styling
-```
+**Action:**
+- Convert raw context into independently deliverable user stories.
+- Write acceptance criteria with Given/When/Then.
+- Mark UI dependencies, backend dependencies, data dependencies, and external integrations.
+- Record open questions and assumptions explicitly.
 
-Load matching community skills and apply their best practices to guide UI implementation.
+**Output:** `docs/plans/{feature-name}/user-stories.md`.
 
-Also check the 5-level skill lookup (Phase 4) for project-level UI conventions.
+**Pause:** always. The developer must confirm stories and required UI references before planning.
 
-### Phase 4: Match Skills (5-Level Lookup)
+### Phase 4: Build Harness Plan
 
-Extract tech keywords from user stories, find best practices by priority:
+**Input:** confirmed user stories, UI references, project conventions, and relevant skills.
 
-| Priority | Source | Description |
-|:---:|------|------|
-| L1 | Project `skills/` | Project-specific conventions (highest priority) |
-| L2 | Installed global skills | superpowers, giga-ui, vue-best-practices, etc. |
-| L3 | `npx skills find {keyword}` | skills.sh community ecosystem |
-| L4 | Context7 MCP | Framework/library official docs |
-| L5 | WebSearch | Fallback |
+**Action:**
+- Build a task graph from user stories.
+- Assign task type, agent role, scheduler mode, isolation key, dependencies, inputs, outputs, review level, and verification gate.
+- Prefer small tasks that can be reviewed and verified independently.
+- Use `references/task-types.md` for scheduler semantics and templates from `references/templates/`.
 
-### Phase 5: Write Implementation Plan
+**Output:** `docs/plans/{feature-name}/implementation-plan.md`.
 
-**REQUIRED SUB-SKILL:** Use `superpowers:writing-plans` to generate the plan.
+**Pause:** always before implementation. Present the implementation plan and wait for developer confirmation unless the developer explicitly bypassed the planning gate.
 
-Based on user stories + UI resources + matched skills, generate bite-sized plan:
-- Each step 2-5 minutes, TDD, exact file paths and code
-- DRY, YAGNI, frequent commits
+### Phase 5: Validate Coverage
 
-Save to `docs/plans/{feature-name}/implementation-plan.md`.
+**Input:** requirements, user stories, and harness plan.
 
-### Phase 6: Requirement Validation
+**Action:**
+- Build a traceability matrix: requirement -> user story -> task -> verification gate.
+- Check every requirement for story coverage, acceptance criteria, implementation task, edge cases, and verification.
+- Classify uncovered items and risks.
 
-Validate that the design and plan fully cover all product requirements before coding. Follow the detailed spec in `references/requirement-validation.md`.
+**Output:** `docs/plans/{feature-name}/validation-report.md`.
 
-Core steps:
-1. Build a traceability matrix: requirement → user story → design section → task
-2. Check each requirement for: story coverage, AC completeness, design landing, task breakdown, edge case coverage
-3. Generate `validation-report.md` with coverage stats, uncovered items, and risk items
-4. **PAUSE:** Present the report to the developer for confirmation
+**Pause:** always when coverage is incomplete, high risk, or requires product judgment.
 
-Judgment:
-- ✅ Pass: all requirements covered, no high-risk items → proceed to Phase 7
-- ⚠️ Conditional pass: coverage ≥ 90%, uncovered items are low priority → confirm with developer, then proceed
-- ❌ Fail: core requirements uncovered or high-risk unresolved → go back to Phase 5 and revise
+### Phase 6: Execute Behind Gates
 
-Save to `docs/plans/{feature-name}/validation-report.md`.
+**Input:** approved harness plan.
 
-### Phase 7: Implement Code
+**Action:**
+- Use subagent-driven execution when available; otherwise execute inline with checkpoints.
+- Preserve isolation keys.
+- Run `parallel` tasks within `parallel_limit`.
+- Run `isolated` tasks serially within the same isolation key and in parallel across different keys.
+- Run `serial` tasks under a global lock.
+- Record meaningful execution notes in `execution-log.md`.
 
-**REQUIRED SUB-SKILL:** Use `superpowers:subagent-driven-development` or `superpowers:executing-plans`.
+**Output:** source, test, documentation, or generated artifacts declared by the plan.
 
-Follow task types and scheduling strategies defined in `references/task-types.md`.
-Follow the 10-step workflow defined in `references/workflow.md`.
-Use task templates from `references/templates/` for task declarations.
+**Pause:** on blockers, repeated verification failure, unclear instructions, or isolation conflicts.
 
-Key constraints:
-- Max 5 parallel tasks
-- `code:dev` → isolated (serial within module, parallel across modules)
-- `code:refactor` → serial (global lock)
-- `doc:write` / `test` → parallel
+### Phase 7: Verify
 
-### Phase 8: Verify
+**Input:** changed artifacts.
 
-1. **Quality gate** (in order, all must pass):
-   ```bash
-   pnpm lint    # Code style
-   pnpm type    # TypeScript type check (tsc --noEmit)
-   pnpm build   # Build verification
-   ```
-2. **UI verification** (frontend projects only): Playwright MCP
-3. **Code review:** **REQUIRED SUB-SKILL:** Use `superpowers:requesting-code-review`
+**Action:**
+- Run the verification gates declared by each task.
+- For TypeScript projects, prefer `pnpm lint`, `pnpm typecheck`, `pnpm build`, and targeted tests when applicable.
+- For frontend projects, verify user-facing behavior with browser automation where available.
+- Capture failures before fixing them.
+- Prefer targeted gates before full gates.
+- Keep successful gate output concise.
+- On failure, capture the command, key error, likely owner task, and next repair action.
 
-## Quick Reference
+**Output:** verification evidence in `execution-log.md` or `handoff.md`.
 
-| Phase | Output | Pause? |
-|-------|--------|--------|
-| 1. Requirements | `requirements.md` | No |
-| 2. User Stories | `user-stories.md` | **Yes** — developer confirms |
-| 3. UI Resources | figma-notes / screenshots | Only if UI stories exist |
-| 4. Skill Matching | matched skills list | No |
-| 5. Plan | `implementation-plan.md` | Per writing-plans skill |
-| 6. Requirement Validation | `validation-report.md` | **Yes** — developer confirms |
-| 7. Code | Source files + tests | Per executing-plans skill |
-| 8. Verify | lint + type + build pass | No |
+**Pause:** if required verification cannot run or fails repeatedly.
 
-## Output Structure
+### Phase 8: Review
 
-```
+**Input:** final diff and verification evidence.
+
+**Action:**
+- Review requirement coverage, behavioral risk, changed files, and verification results.
+- Use strict review for new features and refactors.
+- Use standard review for fixes and tests.
+- Use light review for documentation and research.
+
+**Output:** review notes, risk list, and any follow-up tasks.
+
+**Pause:** if review finds a blocking defect or missing requirement coverage.
+
+### Phase 9: Handoff
+
+**Input:** final artifacts, verification evidence, and review notes.
+
+**Action:**
+- Summarize changed files and user-visible behavior.
+- State verification commands and results.
+- State residual risks or skipped checks.
+- Provide next actions only when they are concrete.
+
+**Output:** `docs/plans/{feature-name}/handoff.md` when the project requires persistent handoff, plus the final agent response.
+
+## MCP Boundary
+
+MCP is a context layer for the harness.
+
+Allowed:
+
+- Fetch ONES requirements through the bundled Requirements MCP Server.
+- Fetch GitHub or Jira issue context through external MCP servers.
+- Fetch Figma design context through a Figma MCP server.
+- Use MCP-derived context to populate harness artifacts.
+
+Not part of this harness skill:
+
+- Changing MCP server source code.
+- Adding MCP tools.
+- Changing adapters, auth, config loading, or package exports.
+
+## Artifact Contract
+
+Use this structure for harness artifacts:
+
+```text
 docs/plans/{feature-name}/
 ├── requirements.md
 ├── user-stories.md
-├── ui-references/
-│   ├── figma-notes.md
-│   └── screenshots/
+├── implementation-plan.md
 ├── validation-report.md
-└── implementation-plan.md
+├── execution-log.md
+└── handoff.md
 ```
+
+Optional UI artifacts:
+
+```text
+docs/plans/{feature-name}/ui-references/
+├── figma-notes.md
+└── screenshots/
+```
+
+## Scheduling Rules
+
+| Scheduler | Meaning | Constraint |
+|-----------|---------|------------|
+| `parallel` | Independent work | Bounded by `parallel_limit` |
+| `isolated` | Work isolated by module, file, or data source | Serial within an isolation key, parallel across keys |
+| `serial` | Work requiring a global lock | One task at a time |
+
+Default `parallel_limit`: 5.
+
+Use `references/task-types.md` for task declarations and review levels.
+
+## Recovery Rules
+
+| Failure | Harness Response |
+|---------|------------------|
+| Missing context | Pause and ask for source, or proceed only with explicit user-provided text |
+| Missing UI reference | Pause before implementation for UI work that depends on visual fidelity |
+| Coverage validation failure | Revise user stories or plan before execution |
+| Verification failure | Capture failure, fix the relevant task, rerun the gate |
+| Parallel conflict | Stop the affected group and serialize the conflict boundary |
+
+## Quick Reference
+
+| Phase | Output | Pause |
+|-------|--------|-------|
+| 1. Intake | Source inventory | Conditional |
+| 2. Context Load | `requirements.md` | Conditional |
+| 3. Normalize | `user-stories.md` | Yes |
+| 4. Harness Plan | `implementation-plan.md` | Conditional |
+| 5. Coverage Validation | `validation-report.md` | Yes on risk |
+| 6. Execute | Changed artifacts + `execution-log.md` | On blocker |
+| 7. Verify | Verification evidence | On failure |
+| 8. Review | Review notes | On blocking finding |
+| 9. Handoff | `handoff.md` or final response | No |
 
 ## Common Mistakes
 
-- **Skipping user stories** — jumping straight from requirements to code. Always convert to user stories first.
-- **Not pausing for UI** — continuing without UI reference when stories involve UI changes. Always pause and ask.
-- **Ignoring skill matching** — not checking for relevant project/community skills before planning. Always run the 5-level lookup.
-- **Skipping requirement validation** — going straight from plan to code without verifying coverage. Always run the traceability check and pause for developer confirmation.
-- **Wrong parallelism** — running `code:refactor` tasks in parallel. Refactoring is always serial.
+- Jumping from requirement to code without normalized stories and a plan.
+- Treating MCP as the implementation target instead of a context source.
+- Running tasks with the same isolation key in parallel.
+- Skipping coverage validation before implementation.
+- Claiming completion without fresh verification evidence.
+- Leaving handoff without changed files, verification results, and residual risks.

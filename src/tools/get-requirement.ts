@@ -1,4 +1,5 @@
 import type { BaseAdapter } from '../adapters/base.js'
+import type { Attachment, Requirement } from '../types/requirement.js'
 import { z } from 'zod/v4'
 
 export const GetRequirementSchema = z.object({
@@ -7,6 +8,45 @@ export const GetRequirementSchema = z.object({
 })
 
 export type GetRequirementInput = z.infer<typeof GetRequirementSchema>
+
+type McpContent
+  = | { type: 'text', text: string }
+    | { type: 'image', data: string, mimeType: string }
+
+async function downloadImageAsBase64(url: string, fallbackMimeType = 'image/png'): Promise<{ base64: string, mimeType: string } | null> {
+  try {
+    const res = await fetch(url, { redirect: 'follow' })
+    if (!res.ok)
+      return null
+
+    const contentType = res.headers.get('content-type') ?? fallbackMimeType
+    const mimeType = contentType.split(';')[0].trim() || fallbackMimeType
+    const buffer = Buffer.from(await res.arrayBuffer())
+    return { base64: buffer.toString('base64'), mimeType }
+  }
+  catch {
+    return null
+  }
+}
+
+function isImageAttachment(attachment: Attachment): boolean {
+  if (attachment.mimeType.startsWith('image/'))
+    return true
+
+  return /\.(?:png|jpe?g|gif|webp|svg)$/i.test(attachment.url)
+}
+
+function displayAttachmentUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString()
+  }
+  catch {
+    return url.replace(/[?#].*$/, '')
+  }
+}
 
 export async function handleGetRequirement(
   input: GetRequirementInput,
@@ -26,18 +66,35 @@ export async function handleGetRequirement(
   }
 
   const requirement = await adapter.getRequirement({ id: input.id })
+  const imageAttachments = requirement.attachments.filter(isImageAttachment)
+  const imageResults = await Promise.all(
+    imageAttachments.map(attachment => downloadImageAsBase64(attachment.url, attachment.mimeType)),
+  )
+
+  const content: McpContent[] = [
+    {
+      type: 'text' as const,
+      text: formatRequirement(requirement),
+    },
+  ]
+
+  for (const image of imageResults) {
+    if (!image)
+      continue
+
+    content.push({
+      type: 'image' as const,
+      data: image.base64,
+      mimeType: image.mimeType,
+    })
+  }
 
   return {
-    content: [
-      {
-        type: 'text' as const,
-        text: formatRequirement(requirement),
-      },
-    ],
+    content,
   }
 }
 
-function formatRequirement(req: import('../types/requirement.js').Requirement): string {
+function formatRequirement(req: Requirement): string {
   const lines = [
     `# ${req.title}`,
     '',
@@ -70,7 +127,7 @@ function formatRequirement(req: import('../types/requirement.js').Requirement): 
   if (req.attachments.length > 0) {
     lines.push('', '## Attachments')
     for (const att of req.attachments) {
-      lines.push(`- [${att.name}](${att.url}) (${att.mimeType}, ${att.size} bytes)`)
+      lines.push(`- [${att.name}](${displayAttachmentUrl(att.url)}) (${att.mimeType}, ${att.size} bytes)`)
     }
   }
 

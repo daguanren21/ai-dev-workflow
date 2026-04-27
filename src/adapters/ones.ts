@@ -1,5 +1,5 @@
 import type { SourceConfig } from '../types/config.js'
-import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep } from '../types/requirement.js'
+import type { Attachment, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep } from '../types/requirement.js'
 
 import type { GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams } from './base.js'
 import crypto from 'node:crypto'
@@ -13,6 +13,9 @@ interface OnesTaskNode {
   uuid: string
   number: number
   name: string
+  description?: string
+  descriptionText?: string
+  desc_rich?: string
   status: { uuid: string, name: string, category?: string }
   priority?: { value: string }
   issueType?: { uuid: string, name: string, detailType?: number }
@@ -93,12 +96,47 @@ interface OnesSession {
   expiresAt: number
 }
 
+interface OnesWikiBlock {
+  id?: string
+  type?: string
+  heading?: number
+  text?: unknown
+  ordered?: boolean
+  level?: number
+  start?: number
+  embedType?: string
+  embedData?: unknown
+  children?: unknown
+  cols?: number
+}
+
+interface OnesWikiContentResponse {
+  content?: string
+  token?: string
+}
+
+interface OnesWikiPageDetailResponse {
+  ref_uuid?: string
+}
+
+interface WikiRenderContext {
+  imageSources: string[]
+}
+
+interface RenderedWikiContent {
+  content: string
+  attachments: Attachment[]
+}
+
 // ============ GraphQL queries ============
 
 const TASK_DETAIL_QUERY = `
   query Task($key: Key) {
     task(key: $key) {
       key uuid number name
+      description
+      descriptionText
+      desc_rich: description
       issueType { uuid name }
       status { uuid name category }
       priority { value }
@@ -435,7 +473,231 @@ function getSetCookies(response: Response): string[] {
   return raw ? [raw] : []
 }
 
-function toRequirement(task: OnesTaskNode, description = ''): Requirement {
+function extractWikiPageUuidsFromText(text: string): string[] {
+  if (!text)
+    return []
+
+  const uuids = new Set<string>()
+  const patterns = [
+    /\/page\/([\w-]+)/g,
+    /page=([\w-]+)/g,
+  ]
+
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[1])
+        uuids.add(match[1])
+    }
+  }
+
+  return [...uuids]
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function getTaskDetailText(task: OnesTaskNode): string {
+  return task.descriptionText?.trim()
+    || htmlToPlainText(task.desc_rich ?? task.description ?? '')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseJsonRecord(value: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return isRecord(parsed) ? parsed : null
+  }
+  catch {
+    return null
+  }
+}
+
+function asWikiBlocks(value: unknown): OnesWikiBlock[] {
+  if (!Array.isArray(value))
+    return []
+
+  return value.filter(isRecord) as OnesWikiBlock[]
+}
+
+function renderWikiTextRuns(value: unknown): string {
+  if (!Array.isArray(value))
+    return ''
+
+  return value
+    .map((run) => {
+      if (!isRecord(run))
+        return ''
+
+      const attributes = isRecord(run.attributes) ? run.attributes : {}
+      const insert = typeof run.insert === 'string'
+        ? run.insert.replace(/\u00A0/g, ' ')
+        : ''
+      const link = typeof attributes.link === 'string' ? attributes.link : ''
+
+      if (link && insert.trim())
+        return `[${insert}](${link})`
+
+      const taskName = typeof attributes.taskName === 'string' ? attributes.taskName : ''
+      if (link && taskName)
+        return `[${taskName}](${link})`
+
+      return insert
+    })
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function renderWikiHeading(text: string, heading: number | undefined): string {
+  if (!heading)
+    return text
+
+  const level = Math.min(Math.max(Math.trunc(heading), 1), 6)
+  return `${'#'.repeat(level)} ${text}`
+}
+
+function getWikiImageSource(block: OnesWikiBlock): string {
+  const embedData = isRecord(block.embedData) ? block.embedData : {}
+  return typeof embedData.src === 'string' ? embedData.src.trim() : ''
+}
+
+function renderWikiEmbed(block: OnesWikiBlock, context: WikiRenderContext): string {
+  if (block.embedType === 'image') {
+    const src = getWikiImageSource(block)
+    if (src && !context.imageSources.includes(src))
+      context.imageSources.push(src)
+
+    return src ? `[Image: ${src}]` : '[Image]'
+  }
+
+  return block.embedType ? `[Embed: ${block.embedType}]` : ''
+}
+
+function escapeWikiTableCell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/[ \t]*\n+[ \t]*/g, ' ').trim()
+}
+
+function renderWikiCell(value: unknown, document: Record<string, unknown>, context: WikiRenderContext): string {
+  const blocks = asWikiBlocks(value)
+  if (!blocks.length)
+    return ''
+
+  return blocks
+    .map(block => renderWikiBlock(block, document, context))
+    .filter(Boolean)
+    .join(' ')
+    .replace(/[ \t]*\n+[ \t]*/g, ' ')
+    .trim()
+}
+
+function renderWikiTable(block: OnesWikiBlock, document: Record<string, unknown>, context: WikiRenderContext): string {
+  const cols = typeof block.cols === 'number' && block.cols > 0
+    ? Math.trunc(block.cols)
+    : 0
+  const children = Array.isArray(block.children)
+    ? block.children.filter((child): child is string => typeof child === 'string')
+    : []
+
+  if (!cols || !children.length)
+    return ''
+
+  const rows: string[] = []
+  for (let index = 0; index < children.length; index += cols) {
+    const rowChildren = children.slice(index, index + cols)
+    const cells = rowChildren.map(childId => escapeWikiTableCell(renderWikiCell(document[childId], document, context)))
+    while (cells.length < cols) {
+      cells.push('')
+    }
+    rows.push(`| ${cells.join(' | ')} |`)
+  }
+
+  if (rows.length > 1) {
+    rows.splice(1, 0, `| ${Array.from({ length: cols }, () => '---').join(' | ')} |`)
+  }
+
+  return rows.join('\n')
+}
+
+function renderWikiBlock(block: OnesWikiBlock, document: Record<string, unknown>, context: WikiRenderContext): string {
+  if (block.type === 'table')
+    return renderWikiTable(block, document, context)
+
+  if (block.type === 'embed')
+    return renderWikiEmbed(block, context)
+
+  const text = renderWikiTextRuns(block.text)
+  if (!text)
+    return ''
+
+  if (block.type === 'list') {
+    const level = typeof block.level === 'number' ? Math.max(Math.trunc(block.level), 1) : 1
+    const indent = '  '.repeat(level - 1)
+    const marker = block.ordered ? `${block.start ?? 1}.` : '-'
+    return `${indent}${marker} ${text}`
+  }
+
+  return renderWikiHeading(text, block.heading)
+}
+
+function renderWikiContent(content: string, context: WikiRenderContext = { imageSources: [] }): string {
+  const trimmed = content.trim()
+  if (!trimmed)
+    return ''
+
+  const document = parseJsonRecord(trimmed)
+  if (!document)
+    return trimmed
+
+  if (!('blocks' in document))
+    return trimmed
+
+  return asWikiBlocks(document.blocks)
+    .map(block => renderWikiBlock(block, document, context))
+    .filter(Boolean)
+    .join('\n\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function mimeTypeFromFileName(fileName: string): string {
+  const normalized = fileName.toLowerCase()
+  if (normalized.endsWith('.jpg') || normalized.endsWith('.jpeg'))
+    return 'image/jpeg'
+  if (normalized.endsWith('.gif'))
+    return 'image/gif'
+  if (normalized.endsWith('.webp'))
+    return 'image/webp'
+  if (normalized.endsWith('.svg'))
+    return 'image/svg+xml'
+
+  return 'image/png'
+}
+
+function attachmentNameFromPath(path: string): string {
+  const name = path.split('/').pop() || path
+  try {
+    return decodeURIComponent(name)
+  }
+  catch {
+    return name
+  }
+}
+
+function toRequirement(task: OnesTaskNode, description = '', attachments: Attachment[] = []): Requirement {
   return {
     id: task.uuid,
     source: 'ones',
@@ -451,7 +713,7 @@ function toRequirement(task: OnesTaskNode, description = ''): Requirement {
     createdAt: '',
     updatedAt: '',
     dueDate: null,
-    attachments: [],
+    attachments,
     raw: task as unknown as Record<string, unknown>,
   }
 }
@@ -865,7 +1127,30 @@ export class OnesAdapter extends BaseAdapter {
    * Fetch wiki page content via REST API.
    * Endpoint: /wiki/api/wiki/team/{teamUuid}/online_page/{wikiUuid}/content
    */
-  private async fetchWikiContent(wikiUuid: string): Promise<string> {
+  private async fetchWikiPageDetail(wikiUuid: string): Promise<OnesWikiPageDetailResponse> {
+    const session = await this.login()
+    const url = `${this.config.apiBase}/wiki/api/wiki/team/${session.teamUuid}/page/${wikiUuid}/detail`
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+
+    if (!response.ok) {
+      return {}
+    }
+
+    return response.json() as Promise<OnesWikiPageDetailResponse>
+  }
+
+  private buildWikiImageUrl(session: OnesSession, refUuid: string, source: string, token: string): string {
+    const encodedRefUuid = encodeURIComponent(refUuid)
+    const encodedSource = source.split('/').map(part => encodeURIComponent(part)).join('/')
+    const encodedToken = encodeURIComponent(token)
+
+    return `${this.config.apiBase}/wiki/api/wiki/editor/${session.teamUuid}/${encodedRefUuid}/resources/${encodedSource}?token=${encodedToken}`
+  }
+
+  private async fetchWikiContent(wikiUuid: string): Promise<RenderedWikiContent> {
     const session = await this.login()
     const url = `${this.config.apiBase}/wiki/api/wiki/team/${session.teamUuid}/online_page/${wikiUuid}/content`
 
@@ -874,11 +1159,33 @@ export class OnesAdapter extends BaseAdapter {
     })
 
     if (!response.ok) {
-      return ''
+      return { content: '', attachments: [] }
     }
 
-    const data = await response.json() as { content?: string }
-    return data.content ?? ''
+    const data = await response.json() as OnesWikiContentResponse
+    const renderContext: WikiRenderContext = { imageSources: [] }
+    const content = renderWikiContent(typeof data.content === 'string' ? data.content : '', renderContext)
+    const token = typeof data.token === 'string' ? data.token : ''
+
+    if (!renderContext.imageSources.length || !token) {
+      return { content, attachments: [] }
+    }
+
+    const detail = await this.fetchWikiPageDetail(wikiUuid)
+    const refUuid = typeof detail.ref_uuid === 'string' ? detail.ref_uuid : ''
+    if (!refUuid) {
+      return { content, attachments: [] }
+    }
+
+    const attachments = renderContext.imageSources.map((source, index) => ({
+      id: `${wikiUuid}-image-${index + 1}`,
+      name: attachmentNameFromPath(source),
+      url: this.buildWikiImageUrl(session, refUuid, source, token),
+      mimeType: mimeTypeFromFileName(source),
+      size: 0,
+    }))
+
+    return { content, attachments }
   }
 
   /**
@@ -929,15 +1236,28 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Task "${taskUuid}" not found`)
     }
 
-    // Fetch wiki page content for related requirement docs (in parallel)
-    const wikiPages = task.relatedWikiPages ?? []
+    // Fetch wiki page content for related requirement docs (in parallel).
+    // Wiki links may come from ONES relations or be pasted directly into the task description.
+    const wikiRefs = new Map<string, { title: string, uuid: string }>()
+    for (const wiki of task.relatedWikiPages ?? []) {
+      if (!wiki.errorMessage)
+        wikiRefs.set(wiki.uuid, { title: wiki.title, uuid: wiki.uuid })
+    }
+
+    const detailForLinkExtraction = [task.description, task.descriptionText, task.desc_rich]
+      .filter(Boolean)
+      .join('\n')
+
+    for (const wikiUuid of extractWikiPageUuidsFromText(detailForLinkExtraction)) {
+      if (!wikiRefs.has(wikiUuid))
+        wikiRefs.set(wikiUuid, { title: `Wiki ${wikiUuid}`, uuid: wikiUuid })
+    }
+
     const wikiContents = await Promise.all(
-      wikiPages
-        .filter(w => !w.errorMessage)
-        .map(async (wiki) => {
-          const content = await this.fetchWikiContent(wiki.uuid)
-          return { title: wiki.title, uuid: wiki.uuid, content }
-        }),
+      [...wikiRefs.values()].map(async (wiki) => {
+        const rendered = await this.fetchWikiContent(wiki.uuid)
+        return { title: wiki.title, uuid: wiki.uuid, content: rendered.content, attachments: rendered.attachments }
+      }),
     )
 
     // Build description: task info + wiki requirement docs
@@ -996,7 +1316,19 @@ export class OnesAdapter extends BaseAdapter {
       }
     }
 
-    const req = toRequirement(task, parts.join('\n'))
+    const detailText = getTaskDetailText(task)
+    const hasWikiContent = wikiContents.some(wiki => wiki.content.trim())
+    if (detailText && !hasWikiContent) {
+      parts.push('')
+      parts.push('---')
+      parts.push('')
+      parts.push('## Requirement Detail')
+      parts.push('')
+      parts.push(detailText)
+    }
+
+    const wikiAttachments = wikiContents.flatMap(wiki => wiki.attachments)
+    const req = toRequirement(task, parts.join('\n'), wikiAttachments)
 
     return req
   }

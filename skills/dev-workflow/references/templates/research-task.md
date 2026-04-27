@@ -1,30 +1,42 @@
-# 调研分析任务模板
+# Research Harness Task Template
 
-```markdown
-## TaskGroup: [调研主题]
+## HarnessTask: HT-RES-1 - Research Decision Input
 
-### Meta
-- parallel_limit: 5
+### Control
+- type: research
+- agent_role: researcher
+- scheduler: parallel
+- isolation_key: research/<topic>
+- dependencies: []
 - review_level: light
-- on_failure: continue
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
-### Tasks
-1. [research] 调研 [方案A] 的优劣势 @cache(7d)
-2. [research] 调研 [方案B] 的优劣势 @cache(7d)
-3. [research] 对比 [方案A] 和 [方案B] @depends(1,2)
-4. [doc:write] 输出调研结论文档
-```
+### Inputs
+- Requirement: US-<number> or QUESTION-<number>
+- Context Source: MCP source, repository file, official documentation, or user-provided text
+- Decision Needed: <specific decision>
 
-## 使用说明
+### Steps
+- Identify primary sources and repository-local evidence.
+- Gather only the context needed for the decision.
+- Compare viable options with tradeoffs.
+- State the recommendation and why it fits the current codebase.
+- Record citations or file references.
+- If a web or MCP source is blocked by verification, login, or access control, record `source_status` and request a fallback instead of inferring content.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
-- **并行策略**: `parallel` — 不同方向可同时调研
-- **Review 级别**: `light`
-- **缓存**: 调研结果可缓存，避免重复工作
+### Outputs
+- Artifact: docs/plans/<feature-name>/research-<topic>.md
+- Decision: recommendation with tradeoffs
 
-## 注意事项
+### Verification
+- Source Check: every factual claim is backed by a cited source or local file reference.
+- Scope Check: recommendation answers the declared decision.
 
-- 使用 `@cache(duration)` 缓存调研结果
-- 多个方案可并行调研
-- 对比分析需等待各方案调研完成（使用 `@depends`）
-- 调研结论应输出为结构化文档
-- 注明信息来源和时效性
+### Done When
+- The decision can be used directly by the harness plan.
+- Unknowns and assumptions are explicit.
+- Light review has no blocking findings.

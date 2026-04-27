@@ -1,29 +1,42 @@
-# 代码开发任务模板
+# Code Development Harness Task Template
 
-```markdown
-## TaskGroup: [功能名称]
+## HarnessTask: HT-DEV-1 - Implement Feature Module
 
-### Meta
-- parallel_limit: 5
+### Control
+- type: code:dev
+- agent_role: implementer
+- scheduler: isolated
+- isolation_key: src/<module>/
+- dependencies: []
 - review_level: strict
-- on_failure: continue
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
-### Tasks
-1. [code:dev] 实现 [模块名] 核心逻辑 @isolated([module]/)
-2. [code:dev] 实现 [模块名] UI 组件 @isolated([module]/)
-3. [code:dev] 实现 [模块名] API 接口层 @isolated([module]/api/)
-4. [test] 编写 [模块名] 单元测试 @isolated([module]/)
-```
+### Inputs
+- Requirement: US-<number>
+- Context: docs/plans/<feature-name>/user-stories.md
+- Plan: docs/plans/<feature-name>/implementation-plan.md
 
-## 使用说明
+### Steps
+- Write or update the failing test that captures the acceptance criterion.
+- Run the targeted test and record the failure.
+- Implement the smallest production change inside the isolation key.
+- Run the targeted test again and record the pass.
+- Run the task verification gate declared below.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
-- **并行策略**: `isolated` — 同模块内串行执行，跨模块并行
-- **Review 级别**: `strict` — 新功能需严格审查
-- **隔离键**: 使用模块路径作为隔离键，如 `@isolated(auth/)`
+### Outputs
+- Artifact: src/<module>/
+- Test Artifact: tests/<module>/
+- Execution Notes: docs/plans/<feature-name>/execution-log.md
 
-## 注意事项
+### Verification
+- Targeted: `pnpm test:run tests/<module>`
+- Type safety: `pnpm typecheck`
 
-- 同一模块的 UI 和逻辑建议串行（共享隔离键）
-- 不同模块可并行开发
-- 确保接口契约在实现前确定
-- 新功能必须附带测试任务
+### Done When
+- The user story acceptance criteria are covered by tests or explicit verification.
+- The implementation stays within the declared isolation key unless the plan is revised.
+- The targeted verification gate passes.

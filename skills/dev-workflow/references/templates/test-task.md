@@ -1,30 +1,41 @@
-# 测试任务模板
+# Test Harness Task Template
 
-```markdown
-## TaskGroup: [测试范围]
+## HarnessTask: HT-TEST-1 - Verify Behavior
 
-### Meta
-- parallel_limit: 5
+### Control
+- type: test
+- agent_role: tester
+- scheduler: parallel
+- isolation_key: tests/<module>/
+- dependencies: []
 - review_level: standard
-- on_failure: continue
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
-### Tasks
-1. [test] 编写 [模块A] 单元测试
-2. [test] 编写 [模块B] 单元测试
-3. [test] 编写 [功能] 集成测试
-4. [test] 运行全量测试并生成覆盖率报告
-```
+### Inputs
+- Requirement: US-<number>
+- Implementation Artifact: <source-path>
+- Acceptance Criteria: docs/plans/<feature-name>/user-stories.md
 
-## 使用说明
+### Steps
+- Identify the behavior, edge case, or regression to verify.
+- Add the smallest test that proves the behavior.
+- Run the test and confirm it fails when the implementation is absent or broken when practical.
+- Restore or keep the implementation and confirm the test passes.
+- Run the broader affected test gate.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
-- **并行策略**: `parallel` — 不同模块的测试可并行编写
-- **Review 级别**: `standard`
-- **on_failure**: `continue` — 单模块测试失败不阻塞其他
+### Outputs
+- Artifact: tests/<module>/
+- Execution Notes: docs/plans/<feature-name>/execution-log.md
 
-## 注意事项
+### Verification
+- Targeted: `pnpm test:run tests/<module>`
+- Broader Gate: `pnpm test:run`
 
-- 不同模块的测试可完全并行编写
-- 集成测试可能依赖多个模块，注意声明依赖
-- 全量测试运行应在所有测试编写完成后
-- 关注测试覆盖率目标
-- 使用项目已有的测试框架和模式
+### Done When
+- The test maps to an acceptance criterion or documented regression.
+- The targeted gate passes.
+- Standard review has no blocking findings.
