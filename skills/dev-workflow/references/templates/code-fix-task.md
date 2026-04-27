@@ -1,28 +1,37 @@
-# 代码修复任务模板
+# Code Fix Harness Task Template
 
-```markdown
-## TaskGroup: [Bug 描述]
+## HarnessTask: HT-FIX-1 - Fix Defect
 
-### Meta
-- parallel_limit: 3
+### Control
+- type: code:fix
+- agent_role: implementer
+- scheduler: isolated
+- isolation_key: <file-or-module-path>
+- dependencies: []
 - review_level: standard
-- on_failure: stop
 
-### Tasks
-1. [research] 定位 [Bug 描述] 根因 @cache(1d)
-2. [code:fix] 修复 [Bug 描述] @isolated([file_path])
-3. [test] 补充回归测试 @isolated([file_path])
-```
+### Inputs
+- Requirement: BUG-<number> or US-<number>
+- Failure Evidence: docs/plans/<feature-name>/requirements.md
+- Context: docs/plans/<feature-name>/execution-log.md
 
-## 使用说明
+### Steps
+- Reproduce or describe the failure from evidence.
+- Add a regression test that fails for the defect.
+- Make the smallest fix inside the isolation key.
+- Rerun the regression test and record the result.
+- Run any broader gate affected by the fix.
 
-- **并行策略**: `isolated` — 同文件串行
-- **Review 级别**: `standard`
-- **on_failure**: `stop` — 修复失败应立即停止
+### Outputs
+- Artifact: <file-or-module-path>
+- Regression Test: tests/<affected-area>/
+- Execution Notes: docs/plans/<feature-name>/execution-log.md
 
-## 注意事项
+### Verification
+- Regression: `pnpm test:run tests/<affected-area>`
+- Quality: `pnpm lint`
 
-- 先调研再修复，避免盲目改代码
-- 修复和测试使用相同隔离键（同文件）
-- 修复后必须补充回归测试
-- 如涉及多文件，每个文件用独立隔离键
+### Done When
+- The original failure is covered by a regression test or explicit reproduction check.
+- The fix does not change unrelated behavior.
+- The regression gate passes.

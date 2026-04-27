@@ -2,7 +2,7 @@
 
 [中文](./README.zh-CN.md)
 
-A parallel-task development framework for AI coding tools, enabling end-to-end development workflow automation.
+An agent harness workflow for AI coding tools, enabling controlled requirement intake, planning, gated execution, verification, review, and handoff.
 
 ---
 
@@ -11,13 +11,13 @@ A parallel-task development framework for AI coding tools, enabling end-to-end d
 | Deliverable | Description |
 |-------------|-------------|
 | **Requirements MCP Server** (`src/`) | MCP server for fetching requirements, with built-in ONES adapter. Installable via npm. |
-| **Dev Workflow Skill** (`skills/dev-workflow/`) | Self-contained development workflow skill. Install it and run the full process. |
+| **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | Self-contained agent harness skill. Install it to run requirement intake, planning, gated execution, verification, review, and handoff. |
 
 ---
 
 ## Quick Start
 
-### 1. Install Dev Workflow Skill
+### 1. Install Agent Harness Workflow Skill
 
 ```bash
 npx skills add daguanren21/ai-dev-workflow
@@ -29,7 +29,7 @@ Install to a specific agent with `-a`:
 npx skills add daguanren21/ai-dev-workflow -a claude-code
 ```
 
-Once installed, AI coding tools will automatically use the dev-workflow skill to drive the full development process.
+Once installed, AI coding tools will automatically use the dev-workflow harness to govern the full development process.
 
 ### 2. Install MCP Server (Optional)
 
@@ -108,22 +108,22 @@ Requirements are not limited to ONES. Pair with official MCP servers for GitHub 
 
 ---
 
-## Dev Workflow Skill
+## Agent Harness Workflow Skill
 
-A self-contained AI-assisted development workflow skill that drives 7 phases:
+A self-contained AI-assisted agent harness skill that governs the full development lifecycle:
 
 ```
-Requirements → User Stories → UI Resources → Skill Matching → Implementation Plan → Code → Verification
+Intake -> Context Load -> Normalize -> Harness Plan -> Coverage Validation -> Gated Execution -> Verification -> Review -> Handoff
 ```
 
 Skill directory structure:
 
 ```
 skills/dev-workflow/
-├── SKILL.md                         # Skill entry (YAML frontmatter + workflow definition)
+├── SKILL.md                         # Skill entry (YAML frontmatter + harness definition)
 └── references/
-    ├── workflow.md                  # 10-step end-to-end workflow
-    ├── task-types.md                # Task types, scheduling strategies, declaration syntax
+    ├── workflow.md                  # Agent harness lifecycle
+    ├── task-types.md                # Harness task types, scheduler modes, declaration syntax
     ├── service-transform.md         # Service-layer transform pattern for Mock/API adaptation
     └── templates/                   # Task declaration templates
         ├── code-dev-task.md
@@ -140,10 +140,10 @@ skills/dev-workflow/
 
 ```
 ai-dev-workflow/
-├── skills/dev-workflow/             # Dev Workflow Skill (self-contained)
+├── skills/dev-workflow/             # Agent Harness Workflow Skill (self-contained)
 │   ├── SKILL.md
 │   └── references/
-│       ├── workflow.md
+│       ├── workflow.md              # Agent harness lifecycle
 │       ├── task-types.md
 │       ├── service-transform.md
 │       └── templates/

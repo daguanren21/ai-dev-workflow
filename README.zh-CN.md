@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-一套面向 AI 编码工具的并行任务开发框架，实现端到端的开发工作流自动化。
+一套面向 AI 编码工具的 agent harness 工作流，用于管控需求接入、计划、门禁执行、验证、审查和交付。
 
 ---
 
@@ -11,13 +11,13 @@
 | 交付物 | 说明 |
 |-------|------|
 | **Requirements MCP Server** (`src/`) | 需求获取 MCP 服务，内置 ONES 适配器，可通过 npm 安装 |
-| **Dev Workflow Skill** (`skills/dev-workflow/`) | 自包含的开发工作流 Skill，安装后即可跑通完整流程 |
+| **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | 自包含的 AI agent harness 工作流 Skill，安装后即可跑通需求接入、计划、门禁执行、验证、审查和交付。 |
 
 ---
 
 ## 快速开始
 
-### 1. 安装 Dev Workflow Skill
+### 1. 安装 Agent Harness Workflow Skill
 
 ```bash
 npx skills add daguanren21/ai-dev-workflow
@@ -29,7 +29,7 @@ npx skills add daguanren21/ai-dev-workflow
 npx skills add daguanren21/ai-dev-workflow -a claude-code
 ```
 
-安装后，AI 编码工具会自动识别并使用 dev-workflow skill 驱动完整的开发流程。
+安装后，AI 编码工具会自动识别并使用 dev-workflow harness 管控完整开发流程。
 
 ### 2. 安装 MCP Server（可选）
 
@@ -108,22 +108,22 @@ npm install -g ai-dev-requirements
 
 ---
 
-## Dev Workflow Skill
+## Agent Harness Workflow Skill
 
-自包含的 AI 辅助开发工作流 Skill，安装后自动驱动 7 个阶段：
+自包含的 AI 辅助 agent harness 工作流 Skill，安装后自动管控完整开发生命周期：
 
 ```
-需求获取 → 用户故事 → UI 资源获取 → 技能匹配 → 实现计划 → 代码实现 → 验证
+需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
 ```
 
 Skill 目录结构：
 
 ```
 skills/dev-workflow/
-├── SKILL.md                         # Skill 入口（YAML frontmatter + 工作流定义）
+├── SKILL.md                         # Skill 入口（YAML frontmatter + harness 定义）
 └── references/
-    ├── workflow.md                  # 10 步端到端工作流
-    ├── task-types.md                # 任务类型、调度策略、声明语法
+    ├── workflow.md                  # Agent harness 生命周期
+    ├── task-types.md                # Harness 任务类型、调度模式、声明语法
     ├── service-transform.md         # Service 层 Transform 适配模式
     └── templates/                   # 任务声明模板
         ├── code-dev-task.md
@@ -140,10 +140,10 @@ skills/dev-workflow/
 
 ```
 ai-dev-workflow/
-├── skills/dev-workflow/             # Dev Workflow Skill（自包含工作流）
+├── skills/dev-workflow/             # Agent Harness Workflow Skill（自包含工作流）
 │   ├── SKILL.md
 │   └── references/
-│       ├── workflow.md
+│       ├── workflow.md              # Agent harness 生命周期
 │       ├── task-types.md
 │       ├── service-transform.md
 │       └── templates/

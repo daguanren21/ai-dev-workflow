@@ -1,162 +1,263 @@
-# 工作流定义
+# Agent Harness Workflow
 
-> 10 步端到端开发工作流
+> Controlled lifecycle for AI coding agents: intake, context load, normalization, harness plan, coverage validation, gated execution, verification, review, and handoff.
 
 ---
 
-## 完整流程
+## End-to-End Flow
 
-```
-① 需求输入
-     ↓
-② 需求获取 ──→ requirements.md
-     ↓
-③ 技术设计 ──→ design.md + tasks.md (前后端拆分)
-     ↓
-④ 技能匹配 ──→ 五级查找机制
-     ↓
-⑤ 最佳实践 ──→ 应用匹配的 skills，更新 design
-     ↓
-⑥ 需求符合性校验 ──→ 追踪矩阵 + 校验报告
-     ↓
-┌────────────────────────────┐
-│  ⑦ 代码实现                 │
-│       ↓                    │
-│  ⑧ 交互验证 (前端项目)     │←──┐
-│       ↓                    │   │ 循环
-│  ⑨ 代码审查                 │───┘
-└────────────────────────────┘
-     ↓
-⑩ 质量检查 (lint → type → build)
-     ↓
-  ✅ 完成
-```
-
-## 阶段详情
-
-| 阶段 | 名称 | 触发条件 | 使用工具 |
-|:---:|------|---------|---------|
-| ① | 需求输入 | 必须 | — |
-| ② | 需求获取 | 必须 | `requirements-mcp` |
-| ③ | 技术设计 | 必须 | Plan 工具 |
-| ④ | 技能匹配 | 必须 | 五级查找机制 |
-| ⑤ | 最佳实践 | 必须 | 动态加载匹配的 skills |
-| ⑥ | 需求符合性校验 | 必须 | 追踪矩阵 + 校验报告，详见 [requirement-validation.md](./requirement-validation.md) |
-| ⑦ | 代码实现 | 必须 | Subagent 并行开发 |
-| ⑧ | 交互验证 | **仅前端项目** | Playwright MCP |
-| ⑨ | 代码审查 | 必须 | Code review |
-| ⑩ | 质量检查 | 必须 | lint + type + build |
-
-## 阶段说明
-
-### ① 需求输入
-
-用户提供需求单号或需求描述，可以是：
-- 需求管理平台ID（如 ONES 工单号、Jira Issue Key、GitHub Issue 编号）
-- 自然语言描述
-- 需求文档链接
-
-### ② 需求获取
-
-通过 `ai-dev-requirements` 自动获取需求详情，输出 `requirements.md`。
-
-### ③ 技术设计
-
-基于需求，生成技术设计方案：
-
-```
-docs/plans/{需求单号}/
-├── requirements.md          # 原始需求
-├── analysis.md              # 需求分析（前后端拆分结果）
-├── frontend/
-│   ├── design.md            # 前端设计方案
-│   └── tasks.md             # 前端任务列表
-├── backend/
-│   ├── design.md            # 后端设计方案
-│   └── tasks.md             # 后端任务列表
-└── shared/
-    └── api-contract.md      # 接口契约
+```text
+1. Intake
+     |
+     v
+2. Context Load -> requirements.md
+     |
+     v
+3. Normalize -> user-stories.md
+     |
+     v
+4. Harness Plan -> implementation-plan.md
+     |
+     v
+5. Coverage Validation -> validation-report.md
+     |
+     v
++--------------------------+
+| 6. Execute Behind Gates  |
+|      |                   |
+|      v                   |
+| 7. Verify                |
+|      |                   |
+|      v                   |
+| 8. Review                |
++--------------------------+
+     |
+     v
+9. Handoff -> handoff.md
 ```
 
-### ④ 技能匹配 — 五级查找
+## Artifact Contract
 
-```
-Level 1: 项目内 skills/        → 项目专属规范（最高优先级）
-Level 2: 全局 skills           → superpowers 等通用开发规范
-Level 3: 开放生态 (skills.sh)  → 社区 skills
-Level 4: Context7 MCP          → 框架/库官方文档
-Level 5: WebSearch             → 网络最佳实践（兜底）
-```
-
-### ⑤ 最佳实践
-
-将匹配到的 skills 应用到设计方案中，更新 `design.md`。
-
-### ⑥ 需求符合性校验
-
-按 [requirement-validation.md](./requirement-validation.md) 规范执行，核心步骤：
-
-1. **构建追踪矩阵** — 逐条提取需求点，建立 需求 → 用户故事 → 设计 → 任务 的映射
-2. **逐项校验** — 对每个需求点检查：故事覆盖、验收标准完整、设计落地、任务分解、边界覆盖
-3. **输出校验报告** — 生成 `validation-report.md`，包含覆盖统计、未覆盖项、风险项
-4. **暂停确认** — 将报告呈现给开发者，等待确认后再进入代码实现
-
-判定规则：
-- ✅ 通过：所有需求点已覆盖，无高风险项 → 进入 ⑦
-- ⚠️ 有条件通过：覆盖率 ≥ 90%，未覆盖项为低优先级 → 与开发者确认后进入 ⑦
-- ❌ 不通过：核心需求未覆盖或高风险未解决 → 回退 ③ 补充设计
-
-### ⑦ 代码实现
-
-按任务类型调度并行/串行执行，详见 [task-types.md](./task-types.md)。
-
-**前后端并行策略：**
-
-```
-          ┌─────────────┐
-          │ 接口契约确定 │
-          └──────┬──────┘
-                 ↓
-    ┌────────────┴────────────┐
-    ↓                         ↓
-┌─────────┐             ┌─────────┐
-│ 前端开发 │   并行执行   │ 后端开发 │
-│ (Mock)  │             │ (API)   │
-└────┬────┘             └────┬────┘
-     └───────────┬───────────┘
-                 ↓
-          ┌─────────────┐
-          │   联调测试   │
-          └─────────────┘
+```text
+docs/plans/{feature-name}/
+├── requirements.md
+├── user-stories.md
+├── implementation-plan.md
+├── validation-report.md
+├── execution-log.md
+└── handoff.md
 ```
 
-### ⑧ 交互验证
+Optional UI artifacts:
 
-仅前端项目，使用 Playwright MCP 进行自动化交互验证。
+```text
+docs/plans/{feature-name}/ui-references/
+├── figma-notes.md
+└── screenshots/
+```
 
-### ⑨ 代码审查
+## Phase Table
 
-根据任务类型的 review_level 进行代码审查：
-- `light` — 文档/调研类，快速检查
-- `standard` — 修复/测试类，标准检查
-- `strict` — 新功能/重构，严格检查
+| Phase | Name | Required | Harness Output | Pause |
+|:---:|------|:---:|------|------|
+| 1 | Intake | Yes | Source inventory and `docs/plans/{feature-name}/` path | Only if the request has no actionable source or goal |
+| 2 | Context Load | Yes | `requirements.md` | Conditional when required context is missing |
+| 3 | Normalize | Yes | `user-stories.md` | Yes, developer confirms stories and UI needs |
+| 4 | Harness Plan | Yes | `implementation-plan.md` | Conditional when scope or risk changes |
+| 5 | Coverage Validation | Yes | `validation-report.md` | Yes when coverage is incomplete or risky |
+| 6 | Execute Behind Gates | Yes | Changed artifacts and `execution-log.md` | On blocker, conflict, or unclear instruction |
+| 7 | Verify | Yes | Verification evidence | On failed or unavailable gate |
+| 8 | Review | Yes | Review notes and risk list | On blocking finding |
+| 9 | Handoff | Yes | `handoff.md` or final response | No |
 
-### ⑩ 质量检查
+## Phase Details
+
+### 1. Intake
+
+Accepted inputs:
+
+- Requirement management ID, such as ONES task ID, Jira issue key, or GitHub issue number.
+- Issue, document, Figma, or screenshot link.
+- Natural language requirement from the developer.
+
+The agent identifies the requested outcome, source type, expected deliverable, and a stable `{feature-name}` for artifact paths.
+
+### 2. Context Load
+
+The harness may load context through:
+
+- Bundled Requirements MCP Server for ONES.
+- External GitHub or Jira MCP servers for issue context.
+- Figma MCP server for design context.
+- Local repository files.
+- User-provided text.
+
+The output is raw context in `requirements.md`. The agent must keep raw context distinct from interpretation so later coverage validation can trace back to the original input.
+
+### 3. Normalize
+
+The agent converts raw context into user stories:
+
+```markdown
+### US-1: <story title>
+**As a** <role>,
+**I want** <goal>,
+**So that** <value>.
+
+#### Acceptance Criteria
+- [ ] Given <precondition>, When <action>, Then <expected result>
+
+#### Dependencies
+- UI: Figma link, screenshot path, text description, or "No UI dependency"
+- Backend: API or service dependency
+- Data: schema, fixture, migration, or "No data dependency"
+- External: third-party service, MCP source, or "No external dependency"
+```
+
+The harness pauses after normalization so the developer can confirm scope and UI references.
+
+### 4. Harness Plan
+
+The plan turns user stories into a task graph. Every task records:
+
+- Task type.
+- Agent role.
+- Scheduler mode.
+- Isolation key.
+- Dependencies.
+- Inputs.
+- Outputs.
+- Verification gate.
+- Review level.
+
+Use `task-types.md` for valid task types and scheduling rules. Use the templates directory for task declarations.
+
+### 5. Coverage Validation
+
+Build a traceability matrix:
+
+```markdown
+| Requirement | User Story | Harness Task | Verification Gate | Status |
+|-------------|------------|--------------|-------------------|--------|
+| R1 | US-1 | HT-1 | `pnpm test -- auth` | Covered |
+```
+
+Check each requirement for:
+
+- Story coverage.
+- Acceptance criteria completeness.
+- Implementation task coverage.
+- Edge case and error path coverage.
+- Verification gate coverage.
+
+Coverage outcomes:
+
+| Result | Condition | Next Action |
+|--------|-----------|-------------|
+| Pass | All requirements covered and no high-risk gaps | Execute |
+| Conditional | Low-risk gap is documented and accepted | Execute after developer confirmation |
+| Fail | Core requirement missing or high-risk ambiguity remains | Revise stories or plan |
+
+### 6. Execute Behind Gates
+
+Execution follows the scheduler:
+
+- `parallel`: independent tasks may run concurrently up to `parallel_limit`.
+- `isolated`: tasks sharing an isolation key run serially; different keys may run in parallel.
+- `serial`: global lock; one task at a time.
+
+Execution rules:
+
+- Prefer subagent-driven execution when available.
+- Use inline execution with checkpoints when subagents are unavailable or not requested.
+- Do not revert unrelated user changes.
+- Record meaningful notes, blockers, and verification results in `execution-log.md`.
+
+### 7. Verify
+
+Verification comes from the plan. Common gates:
 
 ```bash
-pnpm lint    # ESLint 检查
-pnpm type    # TypeScript 类型检查
-pnpm build   # 构建验证
+pnpm lint
+pnpm typecheck
+pnpm build
+pnpm test:run
 ```
 
-## 项目类型判断
+For documentation-only changes, verification may be targeted content review plus repository lint. For frontend behavior, use browser automation where available.
+
+The agent must read command output and report actual evidence. A gate that cannot run must be listed as a skipped check with the reason.
+
+### 8. Review
+
+Review checks:
+
+- Requirement coverage.
+- User-visible behavior.
+- Changed file scope.
+- Error handling and edge cases.
+- Test or verification adequacy.
+- Residual risk.
+
+Review level:
+
+- `light`: documentation, research, and low-risk artifacts.
+- `standard`: fixes, tests, and bounded behavior changes.
+- `strict`: new features, refactors, shared contracts, and high-impact changes.
+
+### 9. Handoff
+
+The handoff contains:
+
+- Summary of changed artifacts.
+- Verification commands and results.
+- Requirement coverage status.
+- Residual risks or skipped checks.
+- Concrete follow-up actions, if any.
+
+Use `handoff.md` when the project needs a persistent artifact. Otherwise include the same facts in the final agent response.
+
+## MCP Boundary
+
+MCP is a context input layer. It may fetch requirements, issue details, related work, test cases, and design context. The harness uses that context to create artifacts and make decisions.
+
+MCP is not the implementation target unless the requested feature explicitly asks for MCP server changes. When MCP server changes are out of scope, do not edit adapters, auth, config loading, tool definitions, package exports, or runtime behavior.
+
+## Recovery Rules
+
+### Missing Context
+
+Pause and ask for the source or permission to proceed from the current user-provided description. Record the missing context in `requirements.md` or `execution-log.md`.
+
+### Missing UI Reference
+
+If visual fidelity matters, pause before implementation. If the developer confirms no visual reference is available, record the chosen text-based design assumptions.
+
+### Coverage Validation Failure
+
+Do not execute. Revise user stories, plan tasks, or verification gates until every core requirement is mapped.
+
+### Verification Failure
+
+Capture the failing command and relevant output. Fix the task that owns the failure, then rerun the same gate before moving forward.
+
+### Parallel Conflict
+
+Stop the affected task group. Serialize work within the conflicting isolation key and document the conflict in `execution-log.md`.
+
+## Project Type Detection
+
+Use project files to choose verification gates and task boundaries:
 
 ```yaml
-project_type: frontend | backend | fullstack | library
+project_type: frontend | backend | fullstack | library | documentation
 
-# 自动判断逻辑：
-# - 存在 src/views/ 或 src/components/ → frontend
-# - 存在 package.json + vue/react 依赖 → frontend
-# - 存在 src/api/ 或 src/services/ 无前端框架 → backend
-# - 两者都有 → fullstack
+detection:
+  frontend: src/components, src/views, React, Vue, Svelte, Next.js, or browser tests
+  backend: src/api, src/services, server runtime, database access, or API tests
+  fullstack: both frontend and backend indicators
+  library: package exports, build artifacts, public types, or reusable modules
+  documentation: markdown-only changes with no runtime behavior change
 ```
+
+For this repository, the default project type is `library` with a bundled `documentation` skill artifact.

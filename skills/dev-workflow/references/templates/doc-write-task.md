@@ -1,29 +1,36 @@
-# 文档编写任务模板
+# Documentation Harness Task Template
 
-```markdown
-## TaskGroup: [文档主题]
+## HarnessTask: HT-DOC-1 - Write Documentation Artifact
 
-### Meta
-- parallel_limit: 5
+### Control
+- type: doc:write
+- agent_role: documenter
+- scheduler: parallel
+- isolation_key: docs/<artifact-name>
+- dependencies: []
 - review_level: light
-- on_failure: continue
 
-### Tasks
-1. [doc:write] 编写 [模块] API 文档
-2. [doc:write] 编写 [模块] 使用指南
-3. [doc:write] 更新 README
-4. [doc:write] 编写 CHANGELOG
-```
+### Inputs
+- Requirement: US-DOC-<number>
+- Source Context: docs/plans/<feature-name>/requirements.md
+- Plan Context: docs/plans/<feature-name>/implementation-plan.md
 
-## 使用说明
+### Steps
+- Identify the audience and required artifact.
+- Update the target document using the repository's existing style.
+- Keep terminology consistent with related docs.
+- Check links, paths, commands, and examples.
+- Record any assumptions in execution notes.
 
-- **并行策略**: `parallel` — 完全并行，文档间无冲突
-- **Review 级别**: `light` — 快速检查即可
-- **on_failure**: `continue` — 单篇文档失败不影响其他
+### Outputs
+- Artifact: <documentation-path>
+- Execution Notes: docs/plans/<feature-name>/execution-log.md
 
-## 注意事项
+### Verification
+- Content Review: confirm the document matches source context and contains no stale workflow names.
+- Repository Gate: `pnpm lint`
 
-- 文档任务可完全并行，无需隔离
-- 注意保持文档间的交叉引用一致性
-- 使用项目已有的文档格式和风格
-- 技术文档应包含代码示例
+### Done When
+- The document accurately describes the implemented behavior or workflow.
+- Cross-references point to existing files.
+- Light review has no blocking findings.
