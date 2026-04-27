@@ -102,10 +102,17 @@ function mockTaskResponse(task: Record<string, unknown>) {
   })
 }
 
-function mockWikiContent(content: string) {
+function mockWikiContent(content: string, overrides: Record<string, unknown> = {}) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
-    json: () => Promise.resolve({ content }),
+    json: () => Promise.resolve({ content, ...overrides }),
+  })
+}
+
+function mockWikiPageDetail(detail: Record<string, unknown>) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve(detail),
   })
 }
 
@@ -171,13 +178,13 @@ describe('onesAdapter', () => {
         description: '<p>具体需求内容详见wiki：<a href="https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-anchor-uuid" target="_blank">点击查看</a></p>',
         descriptionText: '具体需求内容详见wiki：点击查看',
       }))
-      mockWikiContent('## Wiki Anchor Requirement\n\n升级 Node.js 22 和 Vite 7。')
+      mockWikiContent('## Wiki Anchor Requirement\n\n升级示例服务运行时和构建工具。')
 
       const result = await adapter.getRequirement({ id: 'abc-123-def' })
 
       expect(result.description).toContain('## Requirement Documents')
       expect(result.description).toContain('### Wiki wiki-anchor-uuid')
-      expect(result.description).toContain('升级 Node.js 22 和 Vite 7')
+      expect(result.description).toContain('升级示例服务运行时和构建工具')
     })
 
     it('should fetch wiki content from a plain pasted wiki URL in task description text', async () => {
@@ -186,12 +193,58 @@ describe('onesAdapter', () => {
         description: '',
         descriptionText: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-plain-uuid',
       }))
-      mockWikiContent('## Wiki Plain Requirement\n\n升级 eslint 和 @yzc/eslint-config。')
+      mockWikiContent('## Wiki Plain Requirement\n\n升级示例代码检查配置。')
 
       const result = await adapter.getRequirement({ id: 'abc-123-def' })
 
       expect(result.description).toContain('### Wiki wiki-plain-uuid')
-      expect(result.description).toContain('升级 eslint 和 @yzc/eslint-config')
+      expect(result.description).toContain('升级示例代码检查配置')
+    })
+
+    it('should render ONES wiki block content instead of exposing raw JSON', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        relatedWikiPages: [
+          { uuid: 'wiki-block-uuid', title: '示例页面交互优化' },
+        ],
+        relatedWikiPagesCount: 1,
+      }))
+      mockWikiContent(JSON.stringify({
+        'blocks': [
+          { id: 'h1', type: 'text', heading: 1, text: [{ insert: '#10001 示例页面交互优化' }] },
+          { id: 'section', type: 'text', heading: 3, text: [{ insert: '1、示例模块-列表页' }] },
+          { id: 'body', type: 'text', text: [{ insert: '输入查询时，忽略前后空格' }] },
+          { id: 'link', type: 'text', text: [{ insert: 'UI图详见：' }, { insert: '点击查看', attributes: { link: 'https://figma.example/design' } }] },
+          { id: 'list', type: 'list', ordered: false, level: 1, text: [{ insert: '支持换行批量查询' }] },
+          { id: 'table', type: 'table', rows: 2, cols: 2, children: ['cell-1', 'cell-2', 'cell-3', 'cell-4'] },
+          { id: 'image', type: 'embed', embedType: 'image', embedData: { src: 'order.png' } },
+        ],
+        'cell-1': [{ id: 'cell-1-text', type: 'text', text: [{ insert: '更新时间' }] }],
+        'cell-2': [{ id: 'cell-2-text', type: 'text', text: [{ insert: '更新内容' }] }],
+        'cell-3': [{ id: 'cell-3-text', type: 'text', text: [{ insert: '2025.12.26' }] }],
+        'cell-4': [{ id: 'cell-4-text', type: 'text', text: [{ insert: '创建文档' }] }],
+      }), { token: 'wiki-content-token' })
+      mockWikiPageDetail({ ref_uuid: 'wiki-ref-uuid' })
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain('### 示例页面交互优化')
+      expect(result.description).toContain('# #10001 示例页面交互优化')
+      expect(result.description).toContain('### 1、示例模块-列表页')
+      expect(result.description).toContain('输入查询时，忽略前后空格')
+      expect(result.description).toContain('[点击查看](https://figma.example/design)')
+      expect(result.description).toContain('- 支持换行批量查询')
+      expect(result.description).toContain('| 更新时间 | 更新内容 |')
+      expect(result.description).toContain('| 2025.12.26 | 创建文档 |')
+      expect(result.description).toContain('[Image: order.png]')
+      expect(result.attachments).toEqual([
+        expect.objectContaining({
+          name: 'order.png',
+          url: 'https://ones.test/wiki/api/wiki/editor/team-1/wiki-ref-uuid/resources/order.png?token=wiki-content-token',
+          mimeType: 'image/png',
+        }),
+      ])
+      expect(result.description).not.toContain('{"blocks"')
     })
 
     it('should dedupe wiki pages from related wiki pages and task description links', async () => {
@@ -217,14 +270,14 @@ describe('onesAdapter', () => {
     it('should fallback to task detail description when no wiki content is available', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
-        description: '<p>需求简述：【系统优化】项目升级 Node.js 22、Vite 7。</p>',
-        descriptionText: '需求简述：【系统优化】项目升级 Node.js 22、Vite 7。',
+        description: '<p>需求简述：【系统优化】升级示例运行时和构建工具。</p>',
+        descriptionText: '需求简述：【系统优化】升级示例运行时和构建工具。',
       }))
 
       const result = await adapter.getRequirement({ id: 'abc-123-def' })
 
       expect(result.description).toContain('## Requirement Detail')
-      expect(result.description).toContain('需求简述：【系统优化】项目升级 Node.js 22、Vite 7。')
+      expect(result.description).toContain('需求简述：【系统优化】升级示例运行时和构建工具。')
     })
 
     it('should throw if task not found', async () => {
