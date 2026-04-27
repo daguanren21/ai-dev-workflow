@@ -166,6 +166,8 @@ npm install -g ai-dev-requirements
 需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
 ```
 
+这个 harness 遵循“前馈 + 反馈”模型：先用计划、产物和任务边界引导 agent，再用 lint、typecheck、build、tests、review 等确定性门禁形成反压，合格后再交付。
+
 Skill 目录结构：
 
 ```

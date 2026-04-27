@@ -9,6 +9,8 @@
 - isolation_key: research/<topic>
 - dependencies: []
 - review_level: light
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-<number> or QUESTION-<number>
@@ -21,6 +23,10 @@
 - Compare viable options with tradeoffs.
 - State the recommendation and why it fits the current codebase.
 - Record citations or file references.
+- If a web or MCP source is blocked by verification, login, or access control, record `source_status` and request a fallback instead of inferring content.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
 ### Outputs
 - Artifact: docs/plans/<feature-name>/research-<topic>.md

@@ -9,6 +9,8 @@
 - isolation_key: tests/<module>/
 - dependencies: []
 - review_level: standard
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-<number>
@@ -21,6 +23,9 @@
 - Run the test and confirm it fails when the implementation is absent or broken when practical.
 - Restore or keep the implementation and confirm the test passes.
 - Run the broader affected test gate.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
 ### Outputs
 - Artifact: tests/<module>/

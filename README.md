@@ -166,6 +166,8 @@ A self-contained AI-assisted agent harness skill that governs the full developme
 Intake -> Context Load -> Normalize -> Harness Plan -> Coverage Validation -> Gated Execution -> Verification -> Review -> Handoff
 ```
 
+The harness follows a feedforward + feedback model: it guides the agent with plans, artifacts, and task boundaries, then uses deterministic gates such as lint, typecheck, build, tests, and review as backpressure before handoff.
+
 Skill directory structure:
 
 ```

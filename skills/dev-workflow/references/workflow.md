@@ -70,6 +70,17 @@ docs/plans/{feature-name}/ui-references/
 | 8 | Review | Yes | Review notes and risk list | On blocking finding |
 | 9 | Handoff | Yes | `handoff.md` or final response | No |
 
+## Blueprint Model
+
+The harness is a hybrid Blueprint: deterministic nodes handle repeatable control flow, while agent-loop nodes handle reasoning and repair.
+
+| Node Type | Examples | Rule |
+|-----------|----------|------|
+| Deterministic | install, lint, typecheck, build, tests, diff checks | Always run when declared; do not leave to agent memory |
+| Agent Loop | understand, plan, implement, repair, review | Agent may reason and iterate within the declared gate |
+
+Deterministic nodes save context and reduce preventable errors. Agent-loop nodes are useful only inside explicit inputs, outputs, isolation keys, and verification gates.
+
 ## Phase Details
 
 ### 1. Intake
@@ -93,6 +104,20 @@ The harness may load context through:
 - User-provided text.
 
 The output is raw context in `requirements.md`. The agent must keep raw context distinct from interpretation so later coverage validation can trace back to the original input.
+
+#### Context Quality
+
+Record source quality before normalization:
+
+| Status | Meaning | Allowed Next Step |
+|--------|---------|-------------------|
+| `ok` | Source content was loaded and is usable | Normalize |
+| `user_supplied` | Developer pasted or described the content | Normalize with source note |
+| `blocked_by_verification` | Source returned a captcha or verification page | Ask for paste, screenshot, export, or summary |
+| `login_required` | Source requires auth the agent does not have | Ask for accessible context |
+| `unavailable` | Source cannot be fetched | Ask for fallback or stop |
+
+If source status is not `ok` or `user_supplied`, do not infer content from the URL, title, or surrounding metadata. Ask for fallback context and record the fallback used.
 
 ### 3. Normalize
 
@@ -150,6 +175,14 @@ Check each requirement for:
 - Edge case and error path coverage.
 - Verification gate coverage.
 
+Coverage validation should include three sensor classes:
+
+| Sensor Class | Checks | Examples |
+|--------------|--------|----------|
+| Maintainability | internal quality | lint, typecheck, duplication, complexity, docs consistency |
+| Architecture | structural boundaries | dependency direction, module ownership, public contracts |
+| Behavior | user-visible correctness | unit tests, integration tests, UI automation, acceptance checks |
+
 Coverage outcomes:
 
 | Result | Condition | Next Action |
@@ -187,6 +220,16 @@ pnpm test:run
 For documentation-only changes, verification may be targeted content review plus repository lint. For frontend behavior, use browser automation where available.
 
 The agent must read command output and report actual evidence. A gate that cannot run must be listed as a skipped check with the reason.
+
+#### Backpressure
+
+Good backpressure is fast, quiet on success, precise on failure.
+
+- Run targeted gates before full gates when the plan identifies an owner area.
+- On success, record only the gate name and pass status unless full output is requested.
+- On failure, expose the command, key error, likely owner task, and repair instruction.
+- Default retry limit is 2 repair attempts before human escalation.
+- Avoid dumping large passing logs into the active context; store longer evidence in `execution-log.md` when needed.
 
 ### 8. Review
 
@@ -229,6 +272,10 @@ MCP is not the implementation target unless the requested feature explicitly ask
 
 Pause and ask for the source or permission to proceed from the current user-provided description. Record the missing context in `requirements.md` or `execution-log.md`.
 
+### Protected Source
+
+If a URL, MCP source, or document returns verification, login, or access-control content, mark `source_status` as `blocked_by_verification`, `login_required`, or `unavailable`. Request pasted text, screenshot, exported Markdown, exported PDF, or a concise user summary before normalization.
+
 ### Missing UI Reference
 
 If visual fidelity matters, pause before implementation. If the developer confirms no visual reference is available, record the chosen text-based design assumptions.
@@ -239,7 +286,7 @@ Do not execute. Revise user stories, plan tasks, or verification gates until eve
 
 ### Verification Failure
 
-Capture the failing command and relevant output. Fix the task that owns the failure, then rerun the same gate before moving forward.
+Capture the failing command and relevant output. Fix the task that owns the failure, then rerun the same gate before moving forward. Stop after the declared retry limit and ask for human direction.
 
 ### Parallel Conflict
 

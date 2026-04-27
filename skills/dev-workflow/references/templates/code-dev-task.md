@@ -9,6 +9,8 @@
 - isolation_key: src/<module>/
 - dependencies: []
 - review_level: strict
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-<number>
@@ -21,6 +23,9 @@
 - Implement the smallest production change inside the isolation key.
 - Run the targeted test again and record the pass.
 - Run the task verification gate declared below.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
 ### Outputs
 - Artifact: src/<module>/

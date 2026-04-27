@@ -37,6 +37,8 @@ Default `parallel_limit`: 5.
 - isolation_key: <module-or-file-path>
 - dependencies: []
 - review_level: light | standard | strict
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: <requirement id or story id>
@@ -60,6 +62,8 @@ Default `parallel_limit`: 5.
 | `isolation_key` | Yes for `isolated`, optional for others | Module, file, data source, or shared contract boundary |
 | `dependencies` | Yes | Task IDs that must finish first; use an empty list when none exist |
 | `review_level` | Yes | `light`, `standard`, or `strict` |
+| `feedback_mode` | Yes | How verification output is exposed to the agent |
+| `retry_limit` | Yes | Maximum repair attempts before human escalation |
 
 ## Review Levels
 
@@ -68,6 +72,16 @@ Default `parallel_limit`: 5.
 | `light` | Documentation, research, low-risk metadata | Check accuracy, links, scope, and consistency |
 | `standard` | Fixes, tests, data work, bounded behavior | Check correctness, regression risk, and verification evidence |
 | `strict` | New features, refactors, shared contracts | Check requirements coverage, architecture, edge cases, and full verification gates |
+
+## Backpressure
+
+Verification output should act as backpressure:
+
+- `quiet_success`: passing gates report only the gate name and pass status.
+- `actionable_failure`: failing gates expose the command, key error, likely owner task, and repair instruction.
+- Prefer targeted gates before full gates to keep feedback fast and relevant.
+- Default `retry_limit` is 2 repair attempts before human escalation.
+- Long logs belong in `execution-log.md`, not in the active agent context.
 
 ## Scheduling Examples
 
@@ -83,6 +97,8 @@ Default `parallel_limit`: 5.
 - isolation_key: docs/readme
 - dependencies: []
 - review_level: light
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-DOC-1
@@ -108,6 +124,8 @@ Default `parallel_limit`: 5.
 - isolation_key: src/tools/search-requirements.ts
 - dependencies: [HT-PLAN-1]
 - review_level: strict
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-2
@@ -133,6 +151,8 @@ Default `parallel_limit`: 5.
 - isolation_key: global
 - dependencies: [HT-COVERAGE-1]
 - review_level: strict
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-REF-1

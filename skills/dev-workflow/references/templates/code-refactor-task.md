@@ -9,6 +9,8 @@
 - isolation_key: global
 - dependencies: []
 - review_level: strict
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-<number> or REF-<number>
@@ -21,6 +23,9 @@
 - Refactor one bounded area at a time.
 - Run typecheck and targeted tests after each meaningful step.
 - Run full verification gates before review.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
 ### Outputs
 - Artifact: <refactored-paths>

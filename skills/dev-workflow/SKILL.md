@@ -52,6 +52,16 @@ AI agent harness for requirement-driven software work. The harness controls what
 
 **Core principle:** Harness first. Normalize inputs, create traceable artifacts, validate coverage, execute behind gates, and hand off evidence. Do not jump from a requirement directly to code.
 
+## Harness Engineering Principles
+
+- Treat the harness as feedforward guidance plus feedback sensors, not just a checklist.
+- Keep `SKILL.md` concise; load detailed references only when needed.
+- Prefer deterministic gates for repeatable work: dependency install, lint, typecheck, build, tests, diff checks.
+- Use backpressure: successful gates stay quiet, failed gates expose precise, actionable errors.
+- Mark context source quality before planning; do not infer from blocked, login-gated, or verification-gated pages.
+
+For detailed operating rules, use `references/workflow.md`, `references/task-types.md`, and the templates under `references/templates/`.
+
 ## Harness Lifecycle
 
 ### Phase 1: Intake
@@ -147,6 +157,9 @@ AI agent harness for requirement-driven software work. The harness controls what
 - For TypeScript projects, prefer `pnpm lint`, `pnpm typecheck`, `pnpm build`, and targeted tests when applicable.
 - For frontend projects, verify user-facing behavior with browser automation where available.
 - Capture failures before fixing them.
+- Prefer targeted gates before full gates.
+- Keep successful gate output concise.
+- On failure, capture the command, key error, likely owner task, and next repair action.
 
 **Output:** verification evidence in `execution-log.md` or `handoff.md`.
 

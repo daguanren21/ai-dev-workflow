@@ -9,6 +9,8 @@
 - isolation_key: docs/<artifact-name>
 - dependencies: []
 - review_level: light
+- feedback_mode: quiet_success | actionable_failure
+- retry_limit: 2
 
 ### Inputs
 - Requirement: US-DOC-<number>
@@ -21,6 +23,9 @@
 - Keep terminology consistent with related docs.
 - Check links, paths, commands, and examples.
 - Record any assumptions in execution notes.
+- Keep passing gate output concise; record only the gate name and pass status.
+- On failure, record the command, key error, likely owner, and repair action.
+- Stop after two repair attempts and ask for human direction.
 
 ### Outputs
 - Artifact: <documentation-path>
