@@ -13,6 +13,9 @@ interface OnesTaskNode {
   uuid: string
   number: number
   name: string
+  description?: string
+  descriptionText?: string
+  desc_rich?: string
   status: { uuid: string, name: string, category?: string }
   priority?: { value: string }
   issueType?: { uuid: string, name: string, detailType?: number }
@@ -99,6 +102,9 @@ const TASK_DETAIL_QUERY = `
   query Task($key: Key) {
     task(key: $key) {
       key uuid number name
+      description
+      descriptionText
+      desc_rich: description
       issueType { uuid name }
       status { uuid name category }
       priority { value }
@@ -433,6 +439,44 @@ function getSetCookies(response: Response): string[] {
   }
   const raw = response.headers.get('set-cookie')
   return raw ? [raw] : []
+}
+
+function extractWikiPageUuidsFromText(text: string): string[] {
+  if (!text)
+    return []
+
+  const uuids = new Set<string>()
+  const patterns = [
+    /\/page\/([\w-]+)/g,
+    /page=([\w-]+)/g,
+  ]
+
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[1])
+        uuids.add(match[1])
+    }
+  }
+
+  return [...uuids]
+}
+
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function getTaskDetailText(task: OnesTaskNode): string {
+  return task.descriptionText?.trim()
+    || htmlToPlainText(task.desc_rich ?? task.description ?? '')
 }
 
 function toRequirement(task: OnesTaskNode, description = ''): Requirement {
@@ -929,15 +973,28 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Task "${taskUuid}" not found`)
     }
 
-    // Fetch wiki page content for related requirement docs (in parallel)
-    const wikiPages = task.relatedWikiPages ?? []
+    // Fetch wiki page content for related requirement docs (in parallel).
+    // Wiki links may come from ONES relations or be pasted directly into the task description.
+    const wikiRefs = new Map<string, { title: string, uuid: string }>()
+    for (const wiki of task.relatedWikiPages ?? []) {
+      if (!wiki.errorMessage)
+        wikiRefs.set(wiki.uuid, { title: wiki.title, uuid: wiki.uuid })
+    }
+
+    const detailForLinkExtraction = [task.description, task.descriptionText, task.desc_rich]
+      .filter(Boolean)
+      .join('\n')
+
+    for (const wikiUuid of extractWikiPageUuidsFromText(detailForLinkExtraction)) {
+      if (!wikiRefs.has(wikiUuid))
+        wikiRefs.set(wikiUuid, { title: `Wiki ${wikiUuid}`, uuid: wikiUuid })
+    }
+
     const wikiContents = await Promise.all(
-      wikiPages
-        .filter(w => !w.errorMessage)
-        .map(async (wiki) => {
-          const content = await this.fetchWikiContent(wiki.uuid)
-          return { title: wiki.title, uuid: wiki.uuid, content }
-        }),
+      [...wikiRefs.values()].map(async (wiki) => {
+        const content = await this.fetchWikiContent(wiki.uuid)
+        return { title: wiki.title, uuid: wiki.uuid, content }
+      }),
     )
 
     // Build description: task info + wiki requirement docs
@@ -994,6 +1051,17 @@ export class OnesAdapter extends BaseAdapter {
           parts.push('(No content available)')
         }
       }
+    }
+
+    const detailText = getTaskDetailText(task)
+    const hasWikiContent = wikiContents.some(wiki => wiki.content.trim())
+    if (detailText && !hasWikiContent) {
+      parts.push('')
+      parts.push('---')
+      parts.push('')
+      parts.push('## Requirement Detail')
+      parts.push('')
+      parts.push(detailText)
     }
 
     const req = toRequirement(task, parts.join('\n'))

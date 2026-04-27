@@ -75,6 +75,40 @@ function mockLoginFlow() {
   })
 }
 
+function makeRequirementTask(overrides: Record<string, unknown> = {}) {
+  return {
+    key: 'task-abc-123-def',
+    uuid: 'abc-123-def',
+    number: 95945,
+    name: '实现用户认证模块',
+    issueType: { uuid: '15eiaFu6', name: '需求' },
+    status: { uuid: 's1', name: '进行中', category: 'in_progress' },
+    priority: { value: 'high' },
+    assign: { uuid: 'u1', name: '虚拟用户丙' },
+    owner: { uuid: 'owner-1', name: '虚拟用户甲' },
+    project: { uuid: 'p1', name: 'StarCloud' },
+    parent: null,
+    relatedTasks: [],
+    relatedWikiPages: [],
+    relatedWikiPagesCount: 0,
+    ...overrides,
+  }
+}
+
+function mockTaskResponse(task: Record<string, unknown>) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({ data: { task } }),
+  })
+}
+
+function mockWikiContent(content: string) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({ content }),
+  })
+}
+
 describe('onesAdapter', () => {
   let adapter: OnesAdapter
 
@@ -129,6 +163,68 @@ describe('onesAdapter', () => {
       expect(result.description).toContain('Related Tasks')
       expect(result.description).toContain('#95946 前端页面开发')
       expect(result.description).toContain('虚拟用户丁')
+    })
+
+    it('should fetch wiki content from an anchor link in task description', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        description: '<p>具体需求内容详见wiki：<a href="https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-anchor-uuid" target="_blank">点击查看</a></p>',
+        descriptionText: '具体需求内容详见wiki：点击查看',
+      }))
+      mockWikiContent('## Wiki Anchor Requirement\n\n升级 Node.js 22 和 Vite 7。')
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain('## Requirement Documents')
+      expect(result.description).toContain('### Wiki wiki-anchor-uuid')
+      expect(result.description).toContain('升级 Node.js 22 和 Vite 7')
+    })
+
+    it('should fetch wiki content from a plain pasted wiki URL in task description text', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        description: '',
+        descriptionText: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-plain-uuid',
+      }))
+      mockWikiContent('## Wiki Plain Requirement\n\n升级 eslint 和 @yzc/eslint-config。')
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain('### Wiki wiki-plain-uuid')
+      expect(result.description).toContain('升级 eslint 和 @yzc/eslint-config')
+    })
+
+    it('should dedupe wiki pages from related wiki pages and task description links', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        description: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-dup-uuid',
+        descriptionText: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-dup-uuid',
+        relatedWikiPages: [
+          { uuid: 'wiki-dup-uuid', title: '关联需求 Wiki' },
+        ],
+        relatedWikiPagesCount: 1,
+      }))
+      mockWikiContent('## Deduped Requirement\n\n只应出现一次。')
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      const wikiFetchCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/wiki/api/wiki/team/team-1/online_page/wiki-dup-uuid/content'))
+      expect(wikiFetchCalls).toHaveLength(1)
+      expect(result.description.match(/### 关联需求 Wiki/g)).toHaveLength(1)
+      expect(result.description).toContain('只应出现一次')
+    })
+
+    it('should fallback to task detail description when no wiki content is available', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        description: '<p>需求简述：【系统优化】项目升级 Node.js 22、Vite 7。</p>',
+        descriptionText: '需求简述：【系统优化】项目升级 Node.js 22、Vite 7。',
+      }))
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain('## Requirement Detail')
+      expect(result.description).toContain('需求简述：【系统优化】项目升级 Node.js 22、Vite 7。')
     })
 
     it('should throw if task not found', async () => {
