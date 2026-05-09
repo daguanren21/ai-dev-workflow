@@ -3,7 +3,7 @@ import type { RelatedIssue } from '../types/requirement.js'
 import { z } from 'zod/v4'
 
 export const GetRelatedIssuesSchema = z.object({
-  taskId: z.string().describe('The parent task ID or key (e.g. "HRL2p8rTX4mQ9xMv" or "task-HRL2p8rTX4mQ9xMv")'),
+  taskId: z.string().describe('The parent task ID or key (e.g. "mock-task-uuid" or "task-mock-task-uuid")'),
   source: z.string().optional().describe('Source to fetch from. If omitted, uses the default source.'),
 })
 

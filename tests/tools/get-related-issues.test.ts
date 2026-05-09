@@ -14,7 +14,7 @@ const mockIssues: RelatedIssue[] = [
     assignName: '当前用户',
     assignUuid: 'current-user-uuid',
     priorityValue: 'high',
-    projectName: 'StarCloud',
+    projectName: 'MockProject',
   },
   {
     key: 'task-bug-004',
@@ -26,7 +26,7 @@ const mockIssues: RelatedIssue[] = [
     assignName: '其他人',
     assignUuid: 'other-user-uuid',
     priorityValue: 'high',
-    projectName: 'StarCloud',
+    projectName: 'MockProject',
   },
 ]
 
@@ -50,7 +50,7 @@ describe('handleGetRelatedIssues', () => {
 
   it('should return formatted related issues list with all defects', async () => {
     const result = await handleGetRelatedIssues(
-      { taskId: 'HRL2p8rTX4mQ9xMv' },
+      { taskId: 'mock-parent-task-uuid' },
       adapters,
       'ones',
     )

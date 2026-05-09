@@ -3,7 +3,7 @@ import type { Attachment, Requirement } from '../types/requirement.js'
 import { z } from 'zod/v4'
 
 export const GetRequirementSchema = z.object({
-  id: z.string().describe('The requirement/issue ID'),
+  id: z.string().describe('The requirement/issue ID, task number, or ONES wiki page URL'),
   source: z.string().optional().describe('Source to fetch from. If omitted, uses the default source.'),
 })
 

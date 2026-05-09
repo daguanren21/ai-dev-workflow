@@ -3,7 +3,7 @@ import type { IssueDetail } from '../types/requirement.js'
 import { z } from 'zod/v4'
 
 export const GetIssueDetailSchema = z.object({
-  issueId: z.string().describe('The issue task ID or key (e.g. "6W9vW3y8J9DO66Pu" or "task-6W9vW3y8J9DO66Pu")'),
+  issueId: z.string().describe('The issue task ID or key (e.g. "mock-issue-uuid" or "task-mock-issue-uuid")'),
   source: z.string().optional().describe('Source to fetch from. If omitted, uses the default source.'),
 })
 
