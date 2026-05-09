@@ -2,21 +2,21 @@
   "data": {
     "task": {
       "uuid": "abc-123-def",
-      "number": 95945,
+      "number": 1001,
       "name": "实现用户认证模块",
       "desc": "需要实现基于 JWT 的用户认证功能，包括登录、注册、Token 刷新。",
-      "issueType": { "uuid": "15eiaFu6", "name": "需求" },
+      "issueType": { "uuid": "it-requirement", "name": "需求" },
       "status": { "uuid": "s1", "name": "进行中", "category": "in_progress" },
       "priority": { "value": "high" },
       "assign": { "uuid": "u1", "name": "虚拟用户丙" },
-      "project": { "uuid": "p1", "name": "StarCloud" },
+      "project": { "uuid": "p1", "name": "MockProject" },
       "parent": null,
       "relatedTasks": [
         {
           "uuid": "task-001",
-          "number": 95946,
+          "number": 1002,
           "name": "前端页面开发",
-          "issueType": { "uuid": "Q6tBhtVC", "name": "任务" },
+          "issueType": { "uuid": "it-task", "name": "任务" },
           "status": { "uuid": "s2", "name": "未开始", "category": "to_do" },
           "assign": { "uuid": "u2", "name": "虚拟用户丁" }
         }
@@ -32,24 +32,24 @@
             {
               "key": "task-abc-123-def",
               "uuid": "abc-123-def",
-              "number": 95945,
+              "number": 1001,
               "name": "实现用户认证模块",
-              "issueType": { "uuid": "15eiaFu6", "name": "需求" },
+              "issueType": { "uuid": "it-requirement", "name": "需求" },
               "status": { "uuid": "s1", "name": "进行中", "category": "in_progress" },
               "priority": { "value": "high" },
               "assign": { "uuid": "u1", "name": "虚拟用户丙" },
-              "project": { "uuid": "p1", "name": "StarCloud" }
+              "project": { "uuid": "p1", "name": "MockProject" }
             },
             {
               "key": "task-xyz-456",
               "uuid": "xyz-456",
-              "number": 95947,
+              "number": 1003,
               "name": "数据库迁移脚本",
-              "issueType": { "uuid": "Q6tBhtVC", "name": "任务" },
+              "issueType": { "uuid": "it-task", "name": "任务" },
               "status": { "uuid": "s2", "name": "未开始", "category": "to_do" },
               "priority": { "value": "normal" },
               "assign": { "uuid": "u1", "name": "虚拟用户丙" },
-              "project": { "uuid": "p1", "name": "StarCloud" }
+              "project": { "uuid": "p1", "name": "MockProject" }
             }
           ]
         }
@@ -174,7 +174,7 @@
   "relatedIssues": {
     "data": {
       "task": {
-        "key": "task-HRL2p8rTX4mQ9xMv",
+        "key": "task-mock-parent-task-uuid",
         "relatedTasks": [
           {
             "key": "task-bug-001",
@@ -184,7 +184,7 @@
             "status": { "uuid": "s-todo", "name": "待处理", "category": "to_do" },
             "assign": { "uuid": "current-user-uuid", "name": "当前用户" },
             "priority": { "value": "high" },
-            "project": { "uuid": "p1", "name": "StarCloud" }
+            "project": { "uuid": "p1", "name": "MockProject" }
           },
           {
             "key": "task-bug-002",
@@ -194,7 +194,7 @@
             "status": { "uuid": "s-done", "name": "已完成", "category": "done" },
             "assign": { "uuid": "current-user-uuid", "name": "当前用户" },
             "priority": { "value": "normal" },
-            "project": { "uuid": "p1", "name": "StarCloud" }
+            "project": { "uuid": "p1", "name": "MockProject" }
           },
           {
             "key": "task-feat-003",
@@ -204,7 +204,7 @@
             "status": { "uuid": "s-todo2", "name": "待处理", "category": "to_do" },
             "assign": { "uuid": "other-user-uuid", "name": "其他人" },
             "priority": { "value": "normal" },
-            "project": { "uuid": "p1", "name": "StarCloud" }
+            "project": { "uuid": "p1", "name": "MockProject" }
           },
           {
             "key": "task-bug-004",
@@ -214,7 +214,7 @@
             "status": { "uuid": "s-todo3", "name": "待处理", "category": "to_do" },
             "assign": { "uuid": "other-user-uuid", "name": "其他人" },
             "priority": { "value": "high" },
-            "project": { "uuid": "p1", "name": "StarCloud" }
+            "project": { "uuid": "p1", "name": "MockProject" }
           }
         ]
       }
@@ -247,7 +247,7 @@
   "testcaseDetail": {
     "data": {
       "testcaseCases": [
-        { "uuid": "case-001", "id": "T100001", "name": "01.检查登录页面样式", "key": "testcase_case-case-001", "condition": "", "desc": "", "assign": { "uuid": "u1", "name": "测试用户A" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "parent-mod-001-mod-uuid-100-case-001", "testcaseLibrary": { "uuid": "lib-uuid-001" }, "testcaseModule": { "uuid": "mod-uuid-100" }, "relatedTasks": [{ "uuid": "task-uuid-100", "name": "#100 功能模块重构", "number": 90058 }] },
+        { "uuid": "case-001", "id": "T100001", "name": "01.检查登录页面样式", "key": "testcase_case-case-001", "condition": "", "desc": "", "assign": { "uuid": "u1", "name": "测试用户A" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "parent-mod-001-mod-uuid-100-case-001", "testcaseLibrary": { "uuid": "lib-uuid-001" }, "testcaseModule": { "uuid": "mod-uuid-100" }, "relatedTasks": [{ "uuid": "task-uuid-100", "name": "#100 功能模块重构", "number": 3001 }] },
         { "uuid": "case-002", "id": "T100002", "name": "02.检查列表页数据加载", "key": "testcase_case-case-002", "condition": "用户已有历史数据", "desc": "", "assign": { "uuid": "u1", "name": "测试用户A" }, "priority": { "uuid": "p1", "value": "P0" }, "type": { "uuid": "t1", "value": "功能测试" }, "path": "parent-mod-001-mod-uuid-100-case-002", "testcaseLibrary": { "uuid": "lib-uuid-001" }, "testcaseModule": { "uuid": "mod-uuid-100" }, "relatedTasks": [] }
       ],
       "testcaseCaseSteps": [
@@ -268,7 +268,7 @@
   "issueDetail": {
     "data": {
       "task": {
-        "key": "task-6W9vW3y8J9DO66Pu",
+        "key": "task-mock-issue-uuid",
         "uuid": "bug-uuid-001",
         "name": "登录页面崩溃",
         "description": "<p>用户在登录页面输入正确密码后点击登录，页面崩溃。</p><p><img src=\"https://ones.test/attachment/img1.png\" /></p>",
@@ -281,7 +281,7 @@
         "assign": { "uuid": "current-user-uuid", "name": "当前用户" },
         "owner": { "uuid": "owner-uuid", "name": "产品经理" },
         "solver": { "uuid": "current-user-uuid", "name": "当前用户" },
-        "project": { "uuid": "p1", "name": "StarCloud" },
+        "project": { "uuid": "p1", "name": "MockProject" },
         "severityLevel": { "value": "严重" },
         "deadline": "2026-03-20",
         "sprint": { "name": "Sprint 12", "uuid": "sprint-uuid-1" }

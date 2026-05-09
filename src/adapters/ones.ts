@@ -128,6 +128,11 @@ interface RenderedWikiContent {
   attachments: Attachment[]
 }
 
+interface OnesWikiPageRoute {
+  teamUuid: string
+  wikiUuid: string
+}
+
 // ============ GraphQL queries ============
 
 const TASK_DETAIL_QUERY = `
@@ -491,6 +496,34 @@ function extractWikiPageUuidsFromText(text: string): string[] {
   }
 
   return [...uuids]
+}
+
+function parseOnesWikiPageRoute(input: string): OnesWikiPageRoute | null {
+  if (!input.includes('/wiki/'))
+    return null
+
+  const routeText = (() => {
+    try {
+      const parsed = new URL(input)
+      return `${parsed.pathname}${parsed.hash}${parsed.search}`
+    }
+    catch {
+      return input
+    }
+  })()
+
+  const match = routeText.match(/\/team\/([^/?#]+)\/space\/[^/?#]+\/page\/([^/?#]+)/)
+  if (!match?.[1] || !match[2])
+    return null
+
+  return {
+    teamUuid: decodeURIComponent(match[1]),
+    wikiUuid: decodeURIComponent(match[2]),
+  }
+}
+
+function isOnesWikiUrlInput(input: string): boolean {
+  return input.includes('/wiki/')
 }
 
 function htmlToPlainText(html: string): string {
@@ -1127,9 +1160,10 @@ export class OnesAdapter extends BaseAdapter {
    * Fetch wiki page content via REST API.
    * Endpoint: /wiki/api/wiki/team/{teamUuid}/online_page/{wikiUuid}/content
    */
-  private async fetchWikiPageDetail(wikiUuid: string): Promise<OnesWikiPageDetailResponse> {
+  private async fetchWikiPageDetail(wikiUuid: string, teamUuid?: string): Promise<OnesWikiPageDetailResponse> {
     const session = await this.login()
-    const url = `${this.config.apiBase}/wiki/api/wiki/team/${session.teamUuid}/page/${wikiUuid}/detail`
+    const wikiTeamUuid = teamUuid ?? session.teamUuid
+    const url = `${this.config.apiBase}/wiki/api/wiki/team/${wikiTeamUuid}/page/${wikiUuid}/detail`
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -1142,17 +1176,19 @@ export class OnesAdapter extends BaseAdapter {
     return response.json() as Promise<OnesWikiPageDetailResponse>
   }
 
-  private buildWikiImageUrl(session: OnesSession, refUuid: string, source: string, token: string): string {
+  private buildWikiImageUrl(session: OnesSession, refUuid: string, source: string, token: string, teamUuid?: string): string {
     const encodedRefUuid = encodeURIComponent(refUuid)
     const encodedSource = source.split('/').map(part => encodeURIComponent(part)).join('/')
     const encodedToken = encodeURIComponent(token)
+    const wikiTeamUuid = teamUuid ?? session.teamUuid
 
-    return `${this.config.apiBase}/wiki/api/wiki/editor/${session.teamUuid}/${encodedRefUuid}/resources/${encodedSource}?token=${encodedToken}`
+    return `${this.config.apiBase}/wiki/api/wiki/editor/${wikiTeamUuid}/${encodedRefUuid}/resources/${encodedSource}?token=${encodedToken}`
   }
 
-  private async fetchWikiContent(wikiUuid: string): Promise<RenderedWikiContent> {
+  private async fetchWikiContent(wikiUuid: string, teamUuid?: string): Promise<RenderedWikiContent> {
     const session = await this.login()
-    const url = `${this.config.apiBase}/wiki/api/wiki/team/${session.teamUuid}/online_page/${wikiUuid}/content`
+    const wikiTeamUuid = teamUuid ?? session.teamUuid
+    const url = `${this.config.apiBase}/wiki/api/wiki/team/${wikiTeamUuid}/online_page/${wikiUuid}/content`
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -1171,7 +1207,7 @@ export class OnesAdapter extends BaseAdapter {
       return { content, attachments: [] }
     }
 
-    const detail = await this.fetchWikiPageDetail(wikiUuid)
+    const detail = await this.fetchWikiPageDetail(wikiUuid, wikiTeamUuid)
     const refUuid = typeof detail.ref_uuid === 'string' ? detail.ref_uuid : ''
     if (!refUuid) {
       return { content, attachments: [] }
@@ -1180,7 +1216,7 @@ export class OnesAdapter extends BaseAdapter {
     const attachments = renderContext.imageSources.map((source, index) => ({
       id: `${wikiUuid}-image-${index + 1}`,
       name: attachmentNameFromPath(source),
-      url: this.buildWikiImageUrl(session, refUuid, source, token),
+      url: this.buildWikiImageUrl(session, refUuid, source, token, wikiTeamUuid),
       mimeType: mimeTypeFromFileName(source),
       size: 0,
     }))
@@ -1189,10 +1225,40 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   /**
-   * Fetch a single task by UUID or number (e.g. "#95945" or "95945").
+   * Fetch a single task by UUID or number (e.g. "#1001" or "1001").
    * If a number is given, searches first to resolve the UUID.
    */
   async getRequirement(params: GetRequirementParams): Promise<Requirement> {
+    const wikiRoute = parseOnesWikiPageRoute(params.id)
+    if (wikiRoute) {
+      const rendered = await this.fetchWikiContent(wikiRoute.wikiUuid, wikiRoute.teamUuid)
+
+      return {
+        id: wikiRoute.wikiUuid,
+        source: 'ones',
+        title: `Wiki ${wikiRoute.wikiUuid}`,
+        description: rendered.content,
+        status: 'open',
+        priority: 'medium',
+        type: 'feature',
+        labels: [],
+        reporter: '',
+        assignee: null,
+        createdAt: '',
+        updatedAt: '',
+        dueDate: null,
+        attachments: rendered.attachments,
+        raw: {
+          input: params.id,
+          teamUuid: wikiRoute.teamUuid,
+          wikiUuid: wikiRoute.wikiUuid,
+        },
+      }
+    }
+    if (isOnesWikiUrlInput(params.id)) {
+      throw new Error('ONES: Unsupported wiki page URL. Expected /wiki/#/team/{teamUuid}/space/{spaceUuid}/page/{wikiUuid}')
+    }
+
     let taskUuid = params.id
 
     // If the ID looks like a number (with or without #), search to find the UUID
@@ -1511,7 +1577,7 @@ export class OnesAdapter extends BaseAdapter {
   async getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail> {
     let issueKey: string
 
-    // Support number lookup (e.g. "98086" or "#98086")
+    // Support number lookup (e.g. "2001" or "#2001")
     const numMatch = params.issueId.match(/^#?(\d+)$/)
     if (numMatch) {
       const taskNumber = Number.parseInt(numMatch[1], 10)

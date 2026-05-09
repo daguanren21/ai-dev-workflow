@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleGetIssueDetail } from '../../src/tools/get-issue-detail.js'
 
 const mockDetail: IssueDetail = {
-  key: 'task-6W9vW3y8J9DO66Pu',
+  key: 'task-mock-issue-uuid',
   uuid: 'bug-uuid-001',
   name: '登录页面崩溃',
   description: '<p>页面崩溃描述</p>',
@@ -18,7 +18,7 @@ const mockDetail: IssueDetail = {
   solverName: '当前用户',
   priorityValue: 'high',
   severityLevel: '严重',
-  projectName: 'StarCloud',
+  projectName: 'MockProject',
   deadline: '2026-03-20',
   sprintName: 'Sprint 12',
   raw: {},
@@ -44,7 +44,7 @@ describe('handleGetIssueDetail', () => {
 
   it('should return formatted issue detail with description', async () => {
     const result = await handleGetIssueDetail(
-      { issueId: '6W9vW3y8J9DO66Pu' },
+      { issueId: 'mock-issue-uuid' },
       adapters,
       'ones',
     )
@@ -52,7 +52,7 @@ describe('handleGetIssueDetail', () => {
     expect(result.content).toHaveLength(1)
     const text = result.content[0].text
     expect(text).toContain('登录页面崩溃')
-    expect(text).toContain('task-6W9vW3y8J9DO66Pu')
+    expect(text).toContain('task-mock-issue-uuid')
     expect(text).toContain('页面崩溃描述')
     expect(text).toContain('缺陷')
     expect(text).toContain('待处理')
@@ -61,7 +61,7 @@ describe('handleGetIssueDetail', () => {
 
   it('should include image URLs from rich description', async () => {
     const result = await handleGetIssueDetail(
-      { issueId: '6W9vW3y8J9DO66Pu' },
+      { issueId: 'mock-issue-uuid' },
       adapters,
       'ones',
     )

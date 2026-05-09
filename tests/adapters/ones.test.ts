@@ -79,14 +79,14 @@ function makeRequirementTask(overrides: Record<string, unknown> = {}) {
   return {
     key: 'task-abc-123-def',
     uuid: 'abc-123-def',
-    number: 95945,
+    number: 1001,
     name: '实现用户认证模块',
-    issueType: { uuid: '15eiaFu6', name: '需求' },
+    issueType: { uuid: 'it-requirement', name: '需求' },
     status: { uuid: 's1', name: '进行中', category: 'in_progress' },
     priority: { value: 'high' },
     assign: { uuid: 'u1', name: '虚拟用户丙' },
     owner: { uuid: 'owner-1', name: '虚拟用户甲' },
-    project: { uuid: 'p1', name: 'StarCloud' },
+    project: { uuid: 'p1', name: 'MockProject' },
     parent: null,
     relatedTasks: [],
     relatedWikiPages: [],
@@ -146,7 +146,7 @@ describe('onesAdapter', () => {
 
       expect(result.id).toBe('abc-123-def')
       expect(result.source).toBe('ones')
-      expect(result.title).toBe('#95945 实现用户认证模块')
+      expect(result.title).toBe('#1001 实现用户认证模块')
       expect(result.status).toBe('in_progress')
       expect(result.priority).toBe('high')
       expect(result.type).toBe('feature') // 需求 -> feature
@@ -168,14 +168,14 @@ describe('onesAdapter', () => {
       const result = await adapter.getRequirement({ id: 'abc-123-def' })
 
       expect(result.description).toContain('Related Tasks')
-      expect(result.description).toContain('#95946 前端页面开发')
+      expect(result.description).toContain('#1002 前端页面开发')
       expect(result.description).toContain('虚拟用户丁')
     })
 
     it('should fetch wiki content from an anchor link in task description', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
-        description: '<p>具体需求内容详见wiki：<a href="https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-anchor-uuid" target="_blank">点击查看</a></p>',
+        description: '<p>具体需求内容详见wiki：<a href="https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-anchor-uuid" target="_blank">点击查看</a></p>',
         descriptionText: '具体需求内容详见wiki：点击查看',
       }))
       mockWikiContent('## Wiki Anchor Requirement\n\n升级示例服务运行时和构建工具。')
@@ -191,7 +191,7 @@ describe('onesAdapter', () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
         description: '',
-        descriptionText: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-plain-uuid',
+        descriptionText: '具体需求内容详见wiki：https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-plain-uuid',
       }))
       mockWikiContent('## Wiki Plain Requirement\n\n升级示例代码检查配置。')
 
@@ -199,6 +199,35 @@ describe('onesAdapter', () => {
 
       expect(result.description).toContain('### Wiki wiki-plain-uuid')
       expect(result.description).toContain('升级示例代码检查配置')
+    })
+
+    it('should fetch wiki content directly from a pasted ONES wiki page URL', async () => {
+      mockLoginFlow()
+      mockWikiContent('## Direct Wiki Requirement\n\n支持直接粘贴 Wiki 页面 URL 获取需求详情。')
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.example/wiki/#/team/team-direct-uuid/space/space-direct-uuid/page/wiki-direct-uuid',
+      })
+
+      const graphqlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/items/graphql'))
+      expect(graphqlCalls).toHaveLength(0)
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ones.test/wiki/api/wiki/team/team-direct-uuid/online_page/wiki-direct-uuid/content',
+        { headers: { Authorization: 'Bearer test-access-token' } },
+      )
+      expect(result.id).toBe('wiki-direct-uuid')
+      expect(result.title).toBe('Wiki wiki-direct-uuid')
+      expect(result.description).toContain('## Direct Wiki Requirement')
+      expect(result.description).toContain('支持直接粘贴 Wiki 页面 URL 获取需求详情')
+    })
+
+    it('should reject a pasted ONES wiki URL without a page route', async () => {
+      await expect(adapter.getRequirement({
+        id: 'https://ones.example/wiki/#/team/team-direct-uuid/space/space-direct-uuid',
+      })).rejects.toThrow('ONES: Unsupported wiki page URL')
+
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
     it('should render ONES wiki block content instead of exposing raw JSON', async () => {
@@ -250,8 +279,8 @@ describe('onesAdapter', () => {
     it('should dedupe wiki pages from related wiki pages and task description links', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
-        description: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-dup-uuid',
-        descriptionText: '具体需求内容详见wiki：https://1s.oristand.com/wiki/#/team/63FL1oSZ/space/Nt5vQAJN/page/wiki-dup-uuid',
+        description: '具体需求内容详见wiki：https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-dup-uuid',
+        descriptionText: '具体需求内容详见wiki：https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-dup-uuid',
         relatedWikiPages: [
           { uuid: 'wiki-dup-uuid', title: '关联需求 Wiki' },
         ],
@@ -514,7 +543,7 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve(onesFixture.search),
       })
 
-      const result = await adapter.searchRequirements({ query: '#95945' })
+      const result = await adapter.searchRequirements({ query: '#1001' })
 
       expect(result.items).toHaveLength(1)
       expect(result.items[0].id).toBe('abc-123-def')
@@ -542,7 +571,7 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve(onesFixture.relatedIssues),
       })
 
-      const result = await adapter.getRelatedIssues({ taskId: 'HRL2p8rTX4mQ9xMv' })
+      const result = await adapter.getRelatedIssues({ taskId: 'mock-parent-task-uuid' })
 
       // 2 pending defects: bug-001 (current user) and bug-004 (other user)
       expect(result).toHaveLength(2)
@@ -563,7 +592,7 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve(onesFixture.relatedIssues),
       })
 
-      const result = await adapter.getRelatedIssues({ taskId: 'HRL2p8rTX4mQ9xMv' })
+      const result = await adapter.getRelatedIssues({ taskId: 'mock-parent-task-uuid' })
 
       const uuids = result.map(r => r.uuid)
       expect(uuids).not.toContain('bug-uuid-002') // done, not to_do
@@ -601,9 +630,9 @@ describe('onesAdapter', () => {
         }),
       })
 
-      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+      const result = await adapter.getIssueDetail({ issueId: 'mock-issue-uuid' })
 
-      expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
+      expect(result.key).toBe('task-mock-issue-uuid')
       expect(result.name).toContain('登录页面')
       // Should use fresh URLs from REST API, not stale GraphQL ones
       expect(result.descriptionRich).toContain('fresh-signed-img.png')
@@ -624,14 +653,14 @@ describe('onesAdapter', () => {
       // 9. REST fetchTaskInfo fails
       mockFetch.mockResolvedValueOnce({ ok: false })
 
-      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+      const result = await adapter.getIssueDetail({ issueId: 'mock-issue-uuid' })
 
       // Falls back to GraphQL description
       expect(result.descriptionRich).toContain('<img')
       expect(result.descriptionText).toContain('页面崩溃')
     })
 
-    it('should resolve issue by number (e.g. "98086" or "#98086")', async () => {
+    it('should resolve issue by number (e.g. "2001" or "#2001")', async () => {
       mockLoginFlow()
       // 8. search by number
       mockFetch.mockResolvedValueOnce({
@@ -642,7 +671,7 @@ describe('onesAdapter', () => {
               key: 'default',
               tasks: [{
                 uuid: 'bug-uuid-001',
-                number: 98086,
+                number: 2001,
                 name: '登录页面崩溃',
               }],
             }],
@@ -660,9 +689,9 @@ describe('onesAdapter', () => {
         json: () => Promise.resolve({ desc: '<p>Fresh</p>', desc_rich: '<p>Fresh</p>' }),
       })
 
-      const result = await adapter.getIssueDetail({ issueId: '98086' })
+      const result = await adapter.getIssueDetail({ issueId: '2001' })
 
-      expect(result.key).toBe('task-6W9vW3y8J9DO66Pu')
+      expect(result.key).toBe('task-mock-issue-uuid')
       expect(result.name).toContain('登录页面')
     })
 
@@ -697,7 +726,7 @@ describe('onesAdapter', () => {
         headers: new Headers({ location: 'https://cdn.ones.test/fresh-img2.png?X-Amz-Signature=new2' }),
       })
 
-      const result = await adapter.getIssueDetail({ issueId: '6W9vW3y8J9DO66Pu' })
+      const result = await adapter.getIssueDetail({ issueId: 'mock-issue-uuid' })
 
       // Stale URLs should be replaced with fresh ones
       expect(result.description).toContain('fresh-img1.png')
