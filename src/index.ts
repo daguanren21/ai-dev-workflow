@@ -6,12 +6,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { createAdapter } from './adapters/index.js'
 import { loadConfig } from './config/loader.js'
+import { AddManhourSchema, handleAddManhour } from './tools/add-manhour.js'
 import { GetIssueDetailSchema, handleGetIssueDetail } from './tools/get-issue-detail.js'
 import { GetRelatedIssuesSchema, handleGetRelatedIssues } from './tools/get-related-issues.js'
 import { GetRequirementSchema, handleGetRequirement } from './tools/get-requirement.js'
 import { GetTestcasesSchema, handleGetTestcases } from './tools/get-testcases.js'
 import { handleListSources } from './tools/list-sources.js'
 import { handleSearchRequirements, SearchRequirementsSchema } from './tools/search-requirements.js'
+import { handleUpdateTaskPlanDates, UpdateTaskPlanDatesSchema } from './tools/update-task-plan-dates.js'
 
 /**
  * Load .env file into process.env (if it exists).
@@ -169,6 +171,40 @@ async function main() {
     async (params) => {
       try {
         return await handleGetTestcases(params, adapters, config.config.defaultSource)
+      }
+      catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  server.tool(
+    'add_manhour',
+    'Add a work-hour record to a ONES task, bug, or requirement. Supports task key, uuid, number, or displayId.',
+    AddManhourSchema.shape,
+    async (params) => {
+      try {
+        return await handleAddManhour(params, adapters, config.config.defaultSource)
+      }
+      catch (err) {
+        return {
+          content: [{ type: 'text', text: `Error: ${(err as Error).message}` }],
+          isError: true,
+        }
+      }
+    },
+  )
+
+  server.tool(
+    'update_task_plan_dates',
+    'Update plan start and/or plan end dates for a ONES task, bug, or requirement. Supports task key, uuid, number, or displayId.',
+    UpdateTaskPlanDatesSchema.shape,
+    async (params) => {
+      try {
+        return await handleUpdateTaskPlanDates(params, adapters, config.config.defaultSource)
       }
       catch (err) {
         return {
