@@ -115,3 +115,17 @@ export interface TestCaseResult {
   totalCount: number
   cases: TestCase[]
 }
+
+export interface AddManhourResult {
+  key: string
+  taskUuid: string
+  hours: number
+  description: string
+  date: string | null
+}
+
+export interface UpdateTaskPlanDatesResult {
+  taskUuid: string
+  planStartDate: string | null
+  planEndDate: string | null
+}

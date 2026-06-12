@@ -1,5 +1,5 @@
 import type { SourceConfig } from '../types/config.js'
-import type { IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCaseResult } from '../types/requirement.js'
+import type { AddManhourResult, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCaseResult, UpdateTaskPlanDatesResult } from '../types/requirement.js'
 
 export interface GetRequirementParams {
   id: string
@@ -22,6 +22,19 @@ export interface GetIssueDetailParams {
 export interface GetTestcasesParams {
   taskNumber: number
   libraryUuid?: string
+}
+
+export interface AddManhourParams {
+  taskId: string
+  hours: number
+  description: string
+  date?: string
+}
+
+export interface UpdateTaskPlanDatesParams {
+  taskId: string
+  planStartDate?: string
+  planEndDate?: string
 }
 
 /**
@@ -58,4 +71,8 @@ export abstract class BaseAdapter {
   abstract getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail>
 
   abstract getTestcases(params: GetTestcasesParams): Promise<TestCaseResult>
+
+  abstract addManhour(params: AddManhourParams): Promise<AddManhourResult>
+
+  abstract updateTaskPlanDates(params: UpdateTaskPlanDatesParams): Promise<UpdateTaskPlanDatesResult>
 }

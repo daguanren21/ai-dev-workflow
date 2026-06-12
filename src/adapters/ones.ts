@@ -1,7 +1,7 @@
 import type { SourceConfig } from '../types/config.js'
-import type { Attachment, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep } from '../types/requirement.js'
+import type { AddManhourResult, Attachment, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep, UpdateTaskPlanDatesResult } from '../types/requirement.js'
 
-import type { GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams } from './base.js'
+import type { AddManhourParams, GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams, UpdateTaskPlanDatesParams } from './base.js'
 import crypto from 'node:crypto'
 import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
 import { BaseAdapter } from './base.js'
@@ -27,6 +27,13 @@ interface OnesTaskNode {
   relatedWikiPages?: OnesWikiPage[]
   relatedWikiPagesCount?: number
   path?: string
+}
+
+interface OnesProjectNode {
+  key?: string
+  uuid: string
+  name: string
+  identifier?: string
 }
 
 interface OnesWikiPage {
@@ -133,6 +140,29 @@ interface OnesWikiPageRoute {
   wikiUuid: string
 }
 
+interface OnesTaskRef {
+  key: string
+  uuid: string
+}
+
+interface OnesRestTaskSearchItem {
+  fields?: {
+    uuid?: string
+    number?: number
+    summary?: string
+    issue_type_name?: string
+    issue_type_uuid?: string
+    project_uuid?: string
+    project_name?: string
+  }
+}
+
+interface OnesRestTaskSearchResponse {
+  datas?: {
+    task?: OnesRestTaskSearchItem[]
+  }
+}
+
 // ============ GraphQL queries ============
 
 const TASK_DETAIL_QUERY = `
@@ -189,6 +219,28 @@ const ISSUE_TYPES_QUERY = `
       uuid
       name
       detailType
+    }
+  }
+`
+
+const PROJECTS_QUERY = `
+  query Projects($groupBy: GroupBy, $orderBy: OrderBy, $pagination: Pagination, $projectOrderBy: OrderBy, $projectFilterGroup: [Filter!]) {
+    buckets(groupBy: $groupBy, orderBy: $orderBy, pagination: $pagination) {
+      key
+      projects(limit: 10000, orderBy: $projectOrderBy, filterGroup: $projectFilterGroup) {
+        key
+        uuid
+        name
+        identifier
+      }
+    }
+  }
+`
+
+const ADD_MANHOUR_MUTATION = `
+  mutation AddManhour {
+    addManhour(mode: $mode, owner: $owner, task: $task, type: $type, start_time: $start_time, hours: $hours, description: $description, customData: $customData) {
+      key
     }
   }
 `
@@ -526,6 +578,114 @@ function isOnesWikiUrlInput(input: string): boolean {
   return input.includes('/wiki/')
 }
 
+function parseAuthorizeRequestId(location: string): string | null {
+  try {
+    const parsed = new URL(location)
+    return parsed.searchParams.get('auth_request_id') ?? parsed.searchParams.get('id')
+  }
+  catch {
+    const match = location.match(/[?&](?:auth_request_id|id)=([^&#]+)/)
+    return match?.[1] ? decodeURIComponent(match[1]) : null
+  }
+}
+
+function parseAuthorizationCode(location: string): string | null {
+  try {
+    const parsed = new URL(location)
+    return parsed.searchParams.get('code')
+  }
+  catch {
+    const match = location.match(/[?&]code=([^&#]+)/)
+    return match?.[1] ? decodeURIComponent(match[1]) : null
+  }
+}
+
+function parseDisplayId(input: string): { identifier: string, number: number } | null {
+  const match = input.trim().match(/^([a-z]\w*)-(\d+)$/i)
+  if (!match?.[1] || !match[2])
+    return null
+
+  return {
+    identifier: match[1],
+    number: Number.parseInt(match[2], 10),
+  }
+}
+
+function isValidOnesDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return false
+
+  const [yearText, monthText, dayText] = value.split('-')
+  const year = Number.parseInt(yearText, 10)
+  const month = Number.parseInt(monthText, 10)
+  const day = Number.parseInt(dayText, 10)
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+}
+
+function toOnesHours(hours: number): number {
+  if (!Number.isFinite(hours) || hours <= 0) {
+    throw new Error('ONES: hours must be a positive number')
+  }
+
+  return Math.round(hours * 100000)
+}
+
+function getTodayStartUnixSeconds(): number {
+  const now = new Date()
+  const localStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  return Math.floor(localStart.getTime() / 1000)
+}
+
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getLocalStartUnixSeconds(year: number, month: number, day: number): number {
+  return Math.floor(new Date(year, month - 1, day).getTime() / 1000)
+}
+
+function parseManhourDate(input?: string): { date: string | null, startTime: number } {
+  const value = input?.trim()
+  if (!value) {
+    return {
+      date: null,
+      startTime: getTodayStartUnixSeconds(),
+    }
+  }
+
+  const fullDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const dayOnlyMatch = value.match(/^(\d{1,2})号?$/)
+  const now = new Date()
+  const year = fullDateMatch ? Number.parseInt(fullDateMatch[1], 10) : now.getFullYear()
+  const month = fullDateMatch ? Number.parseInt(fullDateMatch[2], 10) : now.getMonth() + 1
+  const day = fullDateMatch
+    ? Number.parseInt(fullDateMatch[3], 10)
+    : dayOnlyMatch
+      ? Number.parseInt(dayOnlyMatch[1], 10)
+      : Number.NaN
+
+  const parsed = new Date(year, month - 1, day)
+  const isValid = Number.isInteger(day)
+    && parsed.getFullYear() === year
+    && parsed.getMonth() === month - 1
+    && parsed.getDate() === day
+
+  if (!isValid)
+    throw new Error('ONES: date must be a valid YYYY-MM-DD date or day of current month')
+
+  return {
+    date: toLocalDateString(parsed),
+    startTime: getLocalStartUnixSeconds(year, month, day),
+  }
+}
+
 function htmlToPlainText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -856,45 +1016,48 @@ export class OnesAdapter extends BaseAdapter {
     if (!authorizeLocation) {
       throw new Error('ONES: Authorize response missing location header')
     }
-    const authRequestId = new URL(authorizeLocation).searchParams.get('id')
-    if (!authRequestId) {
-      throw new Error('ONES: Cannot parse auth_request_id from authorize redirect')
-    }
+    let code = parseAuthorizationCode(authorizeLocation)
+    if (!code) {
+      const authRequestId = parseAuthorizeRequestId(authorizeLocation)
+      if (!authRequestId) {
+        throw new Error('ONES: Cannot parse auth_request_id from authorize redirect')
+      }
 
-    // 6. Finalize auth request
-    const finalizeRes = await fetch(`${baseUrl}/identity/api/auth_request/finalize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'Cookie': cookies,
-      },
-      body: JSON.stringify({
-        auth_request_id: authRequestId,
-        region_uuid: orgUser.region_uuid,
-        org_uuid: orgUser.org_uuid,
-        org_user_uuid: orgUser.org_user.org_user_uuid,
-      }),
-    })
-    if (!finalizeRes.ok) {
-      const text = await finalizeRes.text().catch(() => '')
-      throw new Error(`ONES: Finalize failed: ${finalizeRes.status} ${text}`)
-    }
+      // 6. Finalize auth request
+      const finalizeRes = await fetch(`${baseUrl}/identity/api/auth_request/finalize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8',
+          'Cookie': cookies,
+        },
+        body: JSON.stringify({
+          auth_request_id: authRequestId,
+          region_uuid: orgUser.region_uuid,
+          org_uuid: orgUser.org_uuid,
+          org_user_uuid: orgUser.org_user.org_user_uuid,
+        }),
+      })
+      if (!finalizeRes.ok) {
+        const text = await finalizeRes.text().catch(() => '')
+        throw new Error(`ONES: Finalize failed: ${finalizeRes.status} ${text}`)
+      }
 
-    // 7. Callback to get authorization code
-    const callbackRes = await fetch(
-      `${baseUrl}/identity/authorize/callback?id=${authRequestId}&lang=zh`,
-      {
-        method: 'GET',
-        headers: { Cookie: cookies },
-        redirect: 'manual',
-      },
-    )
+      // 7. Callback to get authorization code
+      const callbackRes = await fetch(
+        `${baseUrl}/identity/authorize/callback?id=${authRequestId}&lang=zh`,
+        {
+          method: 'GET',
+          headers: { Cookie: cookies },
+          redirect: 'manual',
+        },
+      )
 
-    const callbackLocation = callbackRes.headers.get('location')
-    if (!callbackLocation) {
-      throw new Error('ONES: Callback response missing location header')
+      const callbackLocation = callbackRes.headers.get('location')
+      if (!callbackLocation) {
+        throw new Error('ONES: Callback response missing location header')
+      }
+      code = parseAuthorizationCode(callbackLocation)
     }
-    const code = new URL(callbackLocation).searchParams.get('code')
     if (!code) {
       throw new Error('ONES: Cannot parse authorization code from callback redirect')
     }
@@ -990,6 +1153,47 @@ export class OnesAdapter extends BaseAdapter {
     return response.json() as Promise<T>
   }
 
+  private async searchTaskByNumber(taskNumber: number): Promise<OnesTaskNode | null> {
+    const session = await this.login()
+    const url = `${this.config.apiBase}/project/api/project/team/${session.teamUuid}/search?q=${encodeURIComponent(String(taskNumber))}&start=0&limit=10&types=task`
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+
+    if (!response.ok)
+      return null
+
+    const data = await response.json() as OnesRestTaskSearchResponse
+    const tasks = data.datas?.task ?? []
+    const found = tasks
+      .map(item => item.fields)
+      .find(fields => fields?.uuid && fields.number === taskNumber)
+
+    if (!found?.uuid)
+      return null
+
+    return {
+      key: `task-${found.uuid}`,
+      uuid: found.uuid,
+      number: found.number ?? taskNumber,
+      name: found.summary ?? '',
+      status: { uuid: '', name: '', category: undefined },
+      issueType: found.issue_type_uuid || found.issue_type_name
+        ? {
+            uuid: found.issue_type_uuid ?? '',
+            name: found.issue_type_name ?? '',
+          }
+        : undefined,
+      project: found.project_uuid || found.project_name
+        ? {
+            uuid: found.project_uuid ?? '',
+            name: found.project_name ?? '',
+          }
+        : undefined,
+    }
+  }
+
   private async fetchIssueTypes(): Promise<OnesIssueTypeNode[]> {
     if (this.issueTypesCache)
       return this.issueTypesCache
@@ -1002,6 +1206,99 @@ export class OnesAdapter extends BaseAdapter {
 
     this.issueTypesCache = data.data?.issueTypes ?? []
     return this.issueTypesCache
+  }
+
+  private async fetchProjects(): Promise<OnesProjectNode[]> {
+    const data = await this.graphql<{ data?: { buckets?: Array<{ projects?: OnesProjectNode[] }> } }>(
+      PROJECTS_QUERY,
+      {
+        projectOrderBy: { isPin: 'DESC', namePinyin: 'ASC', createTime: 'DESC' },
+        projectFilterGroup: [{ visibleInProject_equal: true, isArchive_equal: false }],
+        groupBy: { projects: {} },
+        orderBy: null,
+        pagination: { limit: 50, after: '', preciseCount: true },
+      },
+      'projects-group-list-for-project-view',
+    )
+
+    return data.data?.buckets?.flatMap(bucket => bucket.projects ?? []) ?? []
+  }
+
+  private async findTaskByNumber(taskNumber: number, projectUuid?: string): Promise<OnesTaskNode | null> {
+    const filter: Record<string, unknown> = { number_in: [taskNumber] }
+    if (projectUuid)
+      filter.project_in = [projectUuid]
+
+    const searchData = await this.graphql<{
+      data?: { buckets?: Array<{ tasks?: OnesTaskNode[] }> }
+    }>(
+      TASK_BY_NUMBER_QUERY,
+      {
+        groupBy: { tasks: {} },
+        groupOrderBy: null,
+        orderBy: { createTime: 'DESC' },
+        filterGroup: [filter],
+        search: null,
+        pagination: { limit: 10, preciseCount: false },
+        limit: 10,
+      },
+      'group-task-data',
+    )
+
+    const allTasks = searchData.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
+    const found = allTasks.find(task =>
+      task.number === taskNumber
+      && (!projectUuid || task.project?.uuid === projectUuid),
+    )
+    if (found)
+      return found
+
+    if (projectUuid)
+      return null
+
+    return this.searchTaskByNumber(taskNumber)
+  }
+
+  private async resolveTaskRef(input: string): Promise<OnesTaskRef> {
+    const taskId = input.trim()
+    if (!taskId)
+      throw new Error('ONES: taskId is required')
+
+    const numMatch = taskId.match(/^#?(\d+)$/)
+    if (numMatch) {
+      const taskNumber = Number.parseInt(numMatch[1], 10)
+      const found = await this.findTaskByNumber(taskNumber)
+      if (!found)
+        throw new Error(`ONES: Task #${taskNumber} not found in current team`)
+
+      return {
+        key: found.key ?? `task-${found.uuid}`,
+        uuid: found.uuid,
+      }
+    }
+
+    const displayId = parseDisplayId(taskId)
+    if (displayId) {
+      const projects = await this.fetchProjects()
+      const project = projects.find(item => item.identifier?.toLowerCase() === displayId.identifier.toLowerCase())
+      if (!project)
+        throw new Error(`ONES: Project identifier "${displayId.identifier}" not found in current team`)
+
+      const found = await this.findTaskByNumber(displayId.number, project.uuid)
+      if (!found)
+        throw new Error(`ONES: Task "${taskId}" not found in current team`)
+
+      return {
+        key: found.key ?? `task-${found.uuid}`,
+        uuid: found.uuid,
+      }
+    }
+
+    const key = taskId.startsWith('task-') ? taskId : `task-${taskId}`
+    return {
+      key,
+      uuid: key.slice('task-'.length),
+    }
   }
 
   private async searchTeamUsers(keyword: string): Promise<Array<{ uuid: string, name: string }>> {
@@ -1259,47 +1556,18 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error('ONES: Unsupported wiki page URL. Expected /wiki/#/team/{teamUuid}/space/{spaceUuid}/page/{wikiUuid}')
     }
 
-    let taskUuid = params.id
-
-    // If the ID looks like a number (with or without #), search to find the UUID
-    const numMatch = taskUuid.match(/^#?(\d+)$/)
-    if (numMatch) {
-      const taskNumber = Number.parseInt(numMatch[1], 10)
-      const searchData = await this.graphql<{
-        data?: { buckets?: Array<{ tasks?: OnesTaskNode[] }> }
-      }>(
-        TASK_BY_NUMBER_QUERY,
-        {
-          groupBy: { tasks: {} },
-          groupOrderBy: null,
-          orderBy: { createTime: 'DESC' },
-          filterGroup: [{ number_in: [taskNumber] }],
-          search: null,
-          pagination: { limit: 10, preciseCount: false },
-          limit: 10,
-        },
-        'group-task-data',
-      )
-
-      const allTasks = searchData.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
-      const found = allTasks.find(t => t.number === taskNumber)
-
-      if (!found) {
-        throw new Error(`ONES: Task #${taskNumber} not found in current team`)
-      }
-      taskUuid = found.uuid
-    }
+    const taskRef = await this.resolveTaskRef(params.id)
 
     // Fetch GraphQL data (structure, relations, wiki pages)
     const graphqlData = await this.graphql<{ data?: { task?: OnesTaskNode } }>(
       TASK_DETAIL_QUERY,
-      { key: `task-${taskUuid}` },
+      { key: taskRef.key },
       'Task',
     )
 
     const task = graphqlData.data?.task
     if (!task) {
-      throw new Error(`ONES: Task "${taskUuid}" not found`)
+      throw new Error(`ONES: Task "${params.id}" not found`)
     }
 
     // Fetch wiki page content for related requirement docs (in parallel).
@@ -1512,6 +1780,92 @@ export class OnesAdapter extends BaseAdapter {
       total,
       page,
       pageSize,
+    }
+  }
+
+  async addManhour(params: AddManhourParams): Promise<AddManhourResult> {
+    const description = params.description.trim()
+    if (!description)
+      throw new Error('ONES: description is required')
+
+    const taskRef = await this.resolveTaskRef(params.taskId)
+    const onesHours = toOnesHours(params.hours)
+    const workDate = parseManhourDate(params.date)
+
+    const data = await this.graphql<{ data?: { addManhour?: { key?: string } } }>(
+      ADD_MANHOUR_MUTATION,
+      {
+        mode: 'simple',
+        type: 'recorded',
+        customData: {},
+        owner: (await this.login()).userUuid,
+        task: taskRef.uuid,
+        start_time: workDate.startTime,
+        hours: onesHours,
+        description,
+      },
+      'add-manhour',
+    )
+
+    const key = data.data?.addManhour?.key
+    if (!key)
+      throw new Error('ONES: Failed to add manhour')
+
+    return {
+      key,
+      taskUuid: taskRef.uuid,
+      hours: params.hours,
+      description,
+      date: workDate.date,
+    }
+  }
+
+  async updateTaskPlanDates(params: UpdateTaskPlanDatesParams): Promise<UpdateTaskPlanDatesResult> {
+    const planStartDate = params.planStartDate?.trim()
+    const planEndDate = params.planEndDate?.trim()
+
+    if (!planStartDate && !planEndDate)
+      throw new Error('ONES: planStartDate or planEndDate is required')
+
+    if (planStartDate && !isValidOnesDate(planStartDate))
+      throw new Error('ONES: planStartDate must be a valid YYYY-MM-DD date')
+
+    if (planEndDate && !isValidOnesDate(planEndDate))
+      throw new Error('ONES: planEndDate must be a valid YYYY-MM-DD date')
+
+    const taskRef = await this.resolveTaskRef(params.taskId)
+    const session = await this.login()
+    const fieldValues: Array<{ field_uuid: string, value: string }> = []
+
+    if (planStartDate)
+      fieldValues.push({ field_uuid: 'field027', value: planStartDate })
+
+    if (planEndDate)
+      fieldValues.push({ field_uuid: 'field028', value: planEndDate })
+
+    const response = await fetch(`${this.config.apiBase}/project/api/project/team/${session.teamUuid}/tasks/update3`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        tasks: [{
+          uuid: taskRef.uuid,
+          field_values: fieldValues,
+        }],
+      }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(`ONES: Failed to update task plan dates: ${response.status} ${text}`)
+    }
+
+    return {
+      taskUuid: taskRef.uuid,
+      planStartDate: planStartDate ?? null,
+      planEndDate: planEndDate ?? null,
     }
   }
 

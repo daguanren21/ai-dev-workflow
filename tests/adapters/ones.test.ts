@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OnesAdapter } from '../../src/adapters/ones.js'
 import onesFixture from '../fixtures/ones-response.json'
 
@@ -20,7 +20,7 @@ vi.mock('node:crypto', () => ({
   },
 }))
 
-function mockLoginFlow() {
+function mockLoginFlow(options: { authorizeLocation?: string, directCode?: boolean } = {}) {
   // 1. encryption_cert
   mockFetch.mockResolvedValueOnce({
     ok: true,
@@ -45,16 +45,18 @@ function mockLoginFlow() {
   mockFetch.mockResolvedValueOnce({
     ok: false,
     status: 302,
-    headers: new Headers({ location: 'https://ones.test/login?id=auth-req-1' }),
+    headers: new Headers({ location: options.authorizeLocation ?? 'https://ones.test/login?id=auth-req-1' }),
   })
-  // 4. finalize
-  mockFetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('') })
-  // 5. callback (302 redirect with code)
-  mockFetch.mockResolvedValueOnce({
-    ok: false,
-    status: 302,
-    headers: new Headers({ location: 'https://ones.test/callback?code=auth-code-1' }),
-  })
+  if (!options.directCode) {
+    // 4. finalize
+    mockFetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('') })
+    // 5. callback (302 redirect with code)
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 302,
+      headers: new Headers({ location: 'https://ones.test/callback?code=auth-code-1' }),
+    })
+  }
   // 6. token exchange
   mockFetch.mockResolvedValueOnce({
     ok: true,
@@ -116,6 +118,51 @@ function mockWikiPageDetail(detail: Record<string, unknown>) {
   })
 }
 
+function mockProjectList(identifier = 'DEMO', uuid = 'project-demo-uuid') {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({
+      data: {
+        buckets: [{
+          key: 'bucket.0.__all',
+          projects: [{
+            key: `project-${uuid}`,
+            uuid,
+            name: 'Anonymous Project',
+            identifier,
+          }],
+        }],
+      },
+    }),
+  })
+}
+
+function mockTaskSearch(tasks: Record<string, unknown>[]) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({
+      data: {
+        buckets: [{
+          key: 'default',
+          tasks,
+        }],
+      },
+    }),
+  })
+}
+
+function mockRestTaskSearch(tasks: Record<string, unknown>[]) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({
+      total: tasks.length,
+      datas: {
+        task: tasks.map(fields => ({ fields })),
+      },
+    }),
+  })
+}
+
 describe('onesAdapter', () => {
   let adapter: OnesAdapter
 
@@ -133,7 +180,46 @@ describe('onesAdapter', () => {
     )
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   describe('getRequirement', () => {
+    it('should parse auth_request_id from authorize redirect', async () => {
+      mockLoginFlow({ authorizeLocation: 'https://ones.test/login?auth_request_id=auth-req-new' })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture),
+      })
+
+      await adapter.getRequirement({ id: 'abc-123-def' })
+
+      const finalizeCall = mockFetch.mock.calls[3]
+      const finalizeBody = JSON.parse(String(finalizeCall[1].body))
+      expect(finalizeBody.auth_request_id).toBe('auth-req-new')
+    })
+
+    it('should exchange authorization code when authorize redirects directly to callback', async () => {
+      mockLoginFlow({
+        authorizeLocation: 'https://ones.test/auth/authorize/callback?code=direct-auth-code&state=org_uuid%3Dorg-1',
+        directCode: true,
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture),
+      })
+
+      await adapter.getRequirement({ id: 'abc-123-def' })
+
+      const finalizeCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/identity/api/auth_request/finalize'))
+      expect(finalizeCall).toBeUndefined()
+
+      const tokenCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/identity/oauth/token'))
+      expect(tokenCall).toBeDefined()
+      const tokenBody = new URLSearchParams(String(tokenCall?.[1].body))
+      expect(tokenBody.get('code')).toBe('direct-auth-code')
+    })
+
     it('should login via PKCE and fetch task via GraphQL', async () => {
       mockLoginFlow()
       // 8. GraphQL task detail response
@@ -156,6 +242,75 @@ describe('onesAdapter', () => {
       const graphqlCall = mockFetch.mock.calls[7]
       expect(graphqlCall[0]).toContain('/project/api/project/team/team-1/items/graphql')
       expect(graphqlCall[1].headers.Authorization).toBe('Bearer test-access-token')
+    })
+
+    it('should resolve a display id to the matching project task', async () => {
+      mockLoginFlow()
+      mockProjectList('DEMO', 'project-demo-uuid')
+      mockTaskSearch([
+        {
+          key: 'task-display-demo-uuid',
+          uuid: 'display-demo-uuid',
+          number: 1001,
+          name: '匿名需求',
+          issueType: { uuid: 'it-requirement', name: '需求' },
+          status: { uuid: 's1', name: '进行中', category: 'in_progress' },
+          project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
+        },
+      ])
+      mockTaskResponse(makeRequirementTask({
+        key: 'task-display-demo-uuid',
+        uuid: 'display-demo-uuid',
+        number: 1001,
+        name: '匿名需求',
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
+      }))
+
+      const result = await adapter.getRequirement({ id: 'DEMO-1001' })
+
+      expect(result.id).toBe('display-demo-uuid')
+      expect(result.title).toBe('#1001 匿名需求')
+
+      const graphQlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/items/graphql'))
+      const searchCallBody = JSON.parse(String(graphQlCalls[1][1].body))
+      expect(searchCallBody.variables.filterGroup).toEqual([
+        { number_in: [1001], project_in: ['project-demo-uuid'] },
+      ])
+    })
+
+    it('should fallback to REST search when numeric task is not returned by GraphQL', async () => {
+      mockLoginFlow()
+      mockTaskSearch([])
+      mockRestTaskSearch([
+        {
+          uuid: 'rest-task-uuid',
+          number: 2001,
+          summary: '匿名任务',
+          display_id: 'DEMO-2001',
+          issue_type_name: '任务',
+          project_uuid: 'project-demo-uuid',
+          project_name: 'Anonymous Project',
+        },
+      ])
+      mockTaskResponse(makeRequirementTask({
+        key: 'task-rest-task-uuid',
+        uuid: 'rest-task-uuid',
+        number: 2001,
+        name: '匿名任务',
+        issueType: { uuid: 'it-task', name: '任务' },
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
+      }))
+
+      const result = await adapter.getRequirement({ id: '2001' })
+
+      expect(result.id).toBe('rest-task-uuid')
+      expect(result.title).toBe('#2001 匿名任务')
+
+      const restSearchCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/search?q=2001'))
+      expect(restSearchCall?.[0]).toBe('https://ones.test/project/api/project/team/team-1/search?q=2001&start=0&limit=10&types=task')
+      expect(restSearchCall?.[1]).toMatchObject({
+        headers: { Authorization: 'Bearer test-access-token' },
+      })
     })
 
     it('should include related tasks in description', async () => {
@@ -560,6 +715,214 @@ describe('onesAdapter', () => {
 
       expect(result.items).toHaveLength(2)
       expect(result.total).toBe(2)
+    })
+  })
+
+  describe('addManhour', () => {
+    it('should add manhour with the current user and convert hours to ONES units', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-12T10:00:00.000Z'))
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { addManhour: { key: 'manhour-demo-key' } } }),
+      })
+
+      const result = await adapter.addManhour({
+        taskId: 'work-item-demo-uuid',
+        hours: 2,
+        description: 'anonymous work log',
+      })
+
+      expect(result.key).toBe('manhour-demo-key')
+      expect(result.taskUuid).toBe('work-item-demo-uuid')
+      expect(result.hours).toBe(2)
+
+      const manhourCall = mockFetch.mock.calls.find(call => String(call[0]).includes('t=add-manhour'))
+      expect(manhourCall).toBeTruthy()
+      const body = JSON.parse(String(manhourCall?.[1].body))
+      expect(body.variables).toMatchObject({
+        mode: 'simple',
+        type: 'recorded',
+        customData: {},
+        owner: 'current-user-uuid',
+        task: 'work-item-demo-uuid',
+        hours: 200000,
+        description: 'anonymous work log',
+      })
+      expect(body.variables.start_time).toEqual(expect.any(Number))
+    })
+
+    it('should add manhour on an explicit full date', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { addManhour: { key: 'manhour-date-key' } } }),
+      })
+
+      const result = await adapter.addManhour({
+        taskId: 'work-item-demo-uuid',
+        hours: 2,
+        description: 'anonymous dated work log',
+        date: '2026-06-11',
+      })
+
+      expect(result.date).toBe('2026-06-11')
+
+      const manhourCall = mockFetch.mock.calls.find(call => String(call[0]).includes('t=add-manhour'))
+      const body = JSON.parse(String(manhourCall?.[1].body))
+      expect(body.variables.start_time).toBe(Math.floor(new Date(2026, 5, 11).getTime() / 1000))
+    })
+
+    it('should add manhour on a day-of-month date using the current year and month', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-12T10:00:00.000Z'))
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { addManhour: { key: 'manhour-day-key' } } }),
+      })
+
+      const result = await adapter.addManhour({
+        taskId: 'work-item-demo-uuid',
+        hours: 2,
+        description: 'anonymous day work log',
+        date: '11号',
+      })
+
+      expect(result.date).toBe('2026-06-11')
+
+      const manhourCall = mockFetch.mock.calls.find(call => String(call[0]).includes('t=add-manhour'))
+      const body = JSON.parse(String(manhourCall?.[1].body))
+      expect(body.variables.start_time).toBe(Math.floor(new Date(2026, 5, 11).getTime() / 1000))
+    })
+
+    it('should reject an invalid manhour date', async () => {
+      await expect(adapter.addManhour({
+        taskId: 'work-item-demo-uuid',
+        hours: 2,
+        description: 'anonymous invalid date work log',
+        date: '32号',
+      })).rejects.toThrow('ONES: date must be a valid YYYY-MM-DD date or day of current month')
+
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('should add manhour after resolving a display id', async () => {
+      mockLoginFlow()
+      mockProjectList('DEMO', 'project-demo-uuid')
+      mockTaskSearch([
+        {
+          key: 'task-display-demo-uuid',
+          uuid: 'display-demo-uuid',
+          number: 1001,
+          name: '匿名任务项',
+          issueType: { uuid: 'it-task', name: '任务' },
+          status: { uuid: 's1', name: '进行中', category: 'in_progress' },
+          project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
+        },
+      ])
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { addManhour: { key: 'manhour-display-key' } } }),
+      })
+
+      await adapter.addManhour({
+        taskId: 'DEMO-1001',
+        hours: 1.5,
+        description: 'anonymous display id work log',
+      })
+
+      const manhourCall = mockFetch.mock.calls.find(call => String(call[0]).includes('t=add-manhour'))
+      const body = JSON.parse(String(manhourCall?.[1].body))
+      expect(body.variables.task).toBe('display-demo-uuid')
+      expect(body.variables.hours).toBe(150000)
+    })
+
+    it('should add manhour after resolving a numeric task through REST search fallback', async () => {
+      mockLoginFlow()
+      mockTaskSearch([])
+      mockRestTaskSearch([
+        {
+          uuid: 'requirement-rest-uuid',
+          number: 3001,
+          summary: '匿名需求',
+          display_id: 'DEMO-3001',
+          issue_type_name: '需求',
+          project_uuid: 'project-demo-uuid',
+          project_name: 'Anonymous Project',
+        },
+      ])
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { addManhour: { key: 'manhour-rest-key' } } }),
+      })
+
+      const result = await adapter.addManhour({
+        taskId: '3001',
+        hours: 5,
+        description: 'anonymous upload component work log',
+      })
+
+      expect(result.taskUuid).toBe('requirement-rest-uuid')
+
+      const manhourCall = mockFetch.mock.calls.find(call => String(call[0]).includes('t=add-manhour'))
+      const body = JSON.parse(String(manhourCall?.[1].body))
+      expect(body.variables.task).toBe('requirement-rest-uuid')
+      expect(body.variables.hours).toBe(500000)
+      expect(body.variables.description).toBe('anonymous upload component work log')
+    })
+  })
+
+  describe('updateTaskPlanDates', () => {
+    it('should update plan start and end dates', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      const result = await adapter.updateTaskPlanDates({
+        taskId: 'work-item-demo-uuid',
+        planStartDate: '2026-06-05',
+        planEndDate: '2026-07-10',
+      })
+
+      expect(result.taskUuid).toBe('work-item-demo-uuid')
+      expect(result.planStartDate).toBe('2026-06-05')
+      expect(result.planEndDate).toBe('2026-07-10')
+
+      const updateCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/tasks/update3'))
+      expect(updateCall).toBeTruthy()
+      const body = JSON.parse(String(updateCall?.[1].body))
+      expect(body).toEqual({
+        tasks: [{
+          uuid: 'work-item-demo-uuid',
+          field_values: [
+            { field_uuid: 'field027', value: '2026-06-05' },
+            { field_uuid: 'field028', value: '2026-07-10' },
+          ],
+        }],
+      })
+    })
+
+    it('should update only the plan end date when start date is omitted', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      await adapter.updateTaskPlanDates({
+        taskId: 'work-item-demo-uuid',
+        planEndDate: '2026-07-10',
+      })
+
+      const updateCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/tasks/update3'))
+      const body = JSON.parse(String(updateCall?.[1].body))
+      expect(body.tasks[0].field_values).toEqual([
+        { field_uuid: 'field028', value: '2026-07-10' },
+      ])
     })
   })
 
