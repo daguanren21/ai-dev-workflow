@@ -1,0 +1,25 @@
+{
+  "name": "codex-workflow-assistant",
+  "version": "0.1.0",
+  "description": "Codex App workflow assistant for requirement intake, confirmed plan dates, GitLab activity drafts, and confirmed work-hour submission.",
+  "author": {
+    "name": "ai-dev-workflow"
+  },
+  "license": "MIT",
+  "keywords": ["codex", "workflow", "requirements", "gitlab", "timesheet"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Workflow Assistant",
+    "shortDescription": "Draft requirement work hours from GitLab activity.",
+    "longDescription": "Starts requirement-driven Codex workflows, creates safe development branches, writes confirmed task plan dates, drafts daily GitLab-based work-hour entries, and submits work hours only after user confirmation.",
+    "developerName": "ai-dev-workflow",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "defaultPrompt": [
+      "Start requirement 96706 from dev.",
+      "Set plan dates for requirement 96706.",
+      "Draft today's work hours."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
