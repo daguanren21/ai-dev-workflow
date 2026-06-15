@@ -18,6 +18,7 @@ The user wants Codex App to run the daily work-hour workflow as a resident autom
 - Draft task plan start and plan end dates from the approved implementation plan.
 - Read GitLab commits and merge requests for the current day through a GitLab token.
 - Draft work-hour records using a middle-level developer estimate.
+- Use `/Users/liyanchao/工作量评估参考表.xlsx` as the workload benchmark source for task splitting and estimation.
 - Require user confirmation before calling `add_manhour`.
 - Require user confirmation before calling `update_task_plan_dates`.
 - Enforce an 8-hour default daily cap for normal work-hour drafting.
@@ -132,8 +133,10 @@ The plugin provides Codex-facing skills. The helper scripts perform deterministi
 ### Work-Hour Estimator
 
 - Estimates as a middle-level developer.
+- Uses the workload reference table as the baseline for benchmark category, complexity level, and maximum hours per task.
 - Uses evidence such as changed files, insertion/deletion counts, test-related changes, number of commits, and manual non-code notes.
 - Rounds to 0.5-hour increments.
+- Splits estimated work into multiple parallel task drafts when the total exceeds the benchmark cap for the selected category.
 - Caps normal daily draft totals at 8 hours.
 - Marks excess, unmatched, or low-confidence entries as manual-review.
 
@@ -255,7 +258,7 @@ Manual notes count toward the 8-hour daily cap unless the user explicitly treats
 
 ## Work-Hour Estimation Rules
 
-The first version uses deterministic rules instead of model-only estimation:
+The first version uses deterministic rules instead of model-only estimation. The workload benchmark table is the source of truth for category and complexity caps. Single task entries must not exceed the selected benchmark hours; overflow becomes additional parallel task drafts under the same requirement.
 
 | Evidence | Draft Hours |
 | --- | --- |
@@ -266,6 +269,14 @@ The first version uses deterministic rules instead of model-only estimation:
 | Cross-module change with tests and review work | 3.5-5.0 |
 | Large multi-area change | 5.5-6.0 and manual-review |
 | Manual self-test or joint debugging note | User-provided hours |
+
+Benchmark policy:
+
+- Default to the `B.中等（h）` value for middle-level estimates unless the user or implementation evidence clearly selects A or C.
+- Use the nearest available lower level if a benchmark has no C-level value.
+- Enforce the table's single task cap before enforcing the daily 8-hour cap.
+- Split work over the selected benchmark cap into multiple same-requirement task drafts.
+- Keep the actual Excel file outside Git; commit only anonymized/static benchmark rules derived from it.
 
 Daily cap policy:
 
@@ -285,6 +296,8 @@ GITLAB_TOKEN=glpat-example
 GITLAB_PROJECT_ID=12345
 WORKFLOW_DAILY_HOUR_CAP=8
 WORKFLOW_DEFAULT_BASE_BRANCH=dev
+WORKFLOW_DEFAULT_BENCHMARK_CATEGORY=前端-新增组件
+WORKFLOW_DEFAULT_COMPLEXITY=medium
 WORKFLOW_STATE_DIR=.codex-workflow
 ```
 
@@ -318,6 +331,7 @@ WORKFLOW_STATE_DIR=.codex-workflow
 - Unit-test GitLab pagination with injected `fetch`.
 - Unit-test requirement matching.
 - Unit-test hour estimation and 8-hour cap.
+- Unit-test benchmark category limits and task splitting.
 - Unit-test draft de-duplication and state transitions.
 - Verify the plan-date skill prompt requires confirmation before calling `update_task_plan_dates`.
 - Validate plugin manifest with the plugin validator.

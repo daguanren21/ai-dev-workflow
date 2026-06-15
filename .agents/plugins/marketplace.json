@@ -1,0 +1,20 @@
+{
+  "name": "ai-dev-workflow-local",
+  "interface": {
+    "displayName": "AI Dev Workflow Local"
+  },
+  "plugins": [
+    {
+      "name": "codex-workflow-assistant",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-workflow-assistant"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

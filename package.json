@@ -15,7 +15,9 @@
     "skills"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && pnpm build:workflow-plugin",
+    "build:mcp": "tsdown",
+    "build:workflow-plugin": "tsdown --config plugins/codex-workflow-assistant/tsdown.config.ts",
     "start": "node --env-file=.env ./dist/index.mjs",
     "dev": "node --env-file=.env --loader tsx src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector node --env-file=.env ./dist/index.mjs",
@@ -54,7 +56,7 @@
     "eslint": "^10.0.0",
     "lint-staged": "^16.2.7",
     "simple-git-hooks": "^2.13.1",
-    "tsdown": "^0.20.3",
+    "tsdown": "^0.22.2",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

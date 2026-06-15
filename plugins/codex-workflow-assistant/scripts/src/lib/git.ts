@@ -2,13 +2,28 @@ import { spawn } from 'node:child_process'
 
 const ALLOWED_BASE_BRANCHES = ['master', 'main', 'dev']
 
-export function assertAllowedBaseBranch(base) {
+export type CommandRunner = (command: string, args: string[]) => Promise<string>
+
+export interface CreateRequirementBranchOptions {
+  requirement: string
+  base: string
+  title?: string
+  run?: CommandRunner
+}
+
+export interface CreateRequirementBranchResult {
+  branch: string
+  base: string
+  requirement: string
+}
+
+export function assertAllowedBaseBranch(base: string): void {
   if (!ALLOWED_BASE_BRANCHES.includes(base)) {
     throw new Error(`Invalid base branch "${base}". Allowed base branches: master, main, dev`)
   }
 }
 
-export function sanitizeBranchPart(value) {
+export function sanitizeBranchPart(value: string): string {
   const text = String(value || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -18,7 +33,12 @@ export function sanitizeBranchPart(value) {
   return text.slice(0, 64) || 'work'
 }
 
-export async function createRequirementBranch({ requirement, base, title = '', run = runCommand }) {
+export async function createRequirementBranch({
+  requirement,
+  base,
+  title = '',
+  run = runCommand,
+}: CreateRequirementBranchOptions): Promise<CreateRequirementBranchResult> {
   assertAllowedBaseBranch(base)
 
   const status = await run('git', ['status', '--porcelain'])
@@ -35,7 +55,7 @@ export async function createRequirementBranch({ requirement, base, title = '', r
   return { branch, base, requirement }
 }
 
-export function runCommand(command, args, options = {}) {
+export function runCommand(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd || process.cwd(),

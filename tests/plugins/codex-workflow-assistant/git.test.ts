@@ -3,7 +3,7 @@ import {
   assertAllowedBaseBranch,
   createRequirementBranch,
   sanitizeBranchPart,
-} from '../../../plugins/codex-workflow-assistant/scripts/lib/git.mjs'
+} from '../../../plugins/codex-workflow-assistant/scripts/src/lib/git.ts'
 
 describe('git workflow helpers', () => {
   it('allows only master, main, and dev as base branches', () => {

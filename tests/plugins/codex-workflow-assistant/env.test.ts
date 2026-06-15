@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseArgs, readConfig } from '../../../plugins/codex-workflow-assistant/scripts/lib/env.mjs'
+import { parseArgs, readConfig } from '../../../plugins/codex-workflow-assistant/scripts/src/lib/env.ts'
 
 describe('workflow env helpers', () => {
   it('parses command arguments with flags', () => {
@@ -22,12 +22,16 @@ describe('workflow env helpers', () => {
       GITLAB_TOKEN: 'glpat-secret',
       GITLAB_PROJECT_ID: '123',
       WORKFLOW_DAILY_HOUR_CAP: '7.5',
+      WORKFLOW_DEFAULT_BENCHMARK_CATEGORY: '后端-新增CRUD模块',
+      WORKFLOW_DEFAULT_COMPLEXITY: 'complex',
     })
 
     expect(config.gitlab.url).toBe('https://gitlab.example.com')
     expect(config.gitlab.token).toBe('glpat-secret')
     expect(config.gitlab.projectId).toBe('123')
     expect(config.dailyHourCap).toBe(7.5)
+    expect(config.defaultBenchmarkCategory).toBe('后端-新增CRUD模块')
+    expect(config.defaultComplexity).toBe('complex')
     expect(JSON.stringify(config.redacted)).not.toContain('glpat-secret')
   })
 })

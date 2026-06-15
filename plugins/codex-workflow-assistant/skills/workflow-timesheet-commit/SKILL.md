@@ -9,15 +9,17 @@ Use this skill when the user wants an immediate work-hour draft after committing
 
 ## Workflow
 
-1. Run:
+1. Ensure the helper CLI exists. If `plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs` is missing, run `pnpm build:workflow-plugin`.
+2. Run:
 
 ```bash
-node plugins/codex-workflow-assistant/scripts/workflow-cli.mjs draft --date today --recent
+node plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs draft --date today --recent
 ```
 
-2. Show the generated draft.
-3. Ask whether to keep it as a pending draft.
-4. Do not submit work hours unless the user explicitly confirms via `$workflow-timesheet-submit`.
+3. Show the generated draft.
+4. Show the matched workload benchmark category and verify no single task exceeds the benchmark cap.
+5. Ask whether to keep it as a pending draft.
+6. Do not submit work hours unless the user explicitly confirms via `$workflow-timesheet-submit`.
 
 ## Hook Policy
 

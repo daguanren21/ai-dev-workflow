@@ -9,20 +9,21 @@ Use this skill from a Codex App project automation scheduled at 17:00.
 
 ## Automation Prompt
 
-Generate today's work-hour draft for this project. Query GitLab activity, match requirement IDs, apply the 8-hour cap, and report entries that need user confirmation. Do not submit work hours unless the user explicitly confirms exact entries in this thread.
+Generate today's work-hour draft for this project. Query GitLab activity, match requirement IDs, estimate against the workload benchmark table, split any task that exceeds its benchmark cap, apply the 8-hour daily cap, and report entries that need user confirmation. Do not submit work hours unless the user explicitly confirms exact entries in this thread.
 
 ## Workflow
 
-1. Run:
+1. Ensure the helper CLI exists. If `plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs` is missing, run `pnpm build:workflow-plugin`.
+2. Run:
 
 ```bash
-node plugins/codex-workflow-assistant/scripts/workflow-cli.mjs draft --date today
+node plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs draft --date today
 ```
 
-2. Read the generated markdown summary.
-3. Present each draft entry with task ID, hours, date, description, evidence, and confidence.
-4. Ask the user to approve, edit, or reject entries.
-5. If the user confirms entries, use `$workflow-timesheet-submit`.
+3. Read the generated markdown summary.
+4. Present each draft entry with task ID, benchmark category, benchmark cap, hours, date, description, evidence, and confidence.
+5. Ask the user to approve, edit, or reject entries.
+6. If the user confirms entries, use `$workflow-timesheet-submit`.
 
 ## Automation Requirements
 
@@ -34,3 +35,7 @@ node plugins/codex-workflow-assistant/scripts/workflow-cli.mjs draft --date toda
 ## Submission Rule
 
 Never call `add_manhour` from an unattended automation run. Confirmation must happen in the thread after the draft is visible to the user.
+
+## Benchmark Rule
+
+Use the workload reference table as the estimation baseline. A single task draft must not exceed the selected benchmark hours. If estimated work exceeds the benchmark cap, split it into multiple parallel task drafts under the same requirement and mark the split evidence.
