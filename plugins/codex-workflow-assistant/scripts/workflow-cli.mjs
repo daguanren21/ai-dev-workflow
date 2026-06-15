@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs, readConfig } from './lib/env.mjs'
+import { createRequirementBranch } from './lib/git.mjs'
 
 const USAGE = `Usage:
   workflow-cli.mjs branch --requirement <id> --base <master|main|dev>
@@ -9,7 +10,7 @@ const USAGE = `Usage:
   workflow-cli.mjs status --date <today|YYYY-MM-DD>`
 
 async function main(argv) {
-  const { command } = parseArgs(argv)
+  const { command, flags } = parseArgs(argv)
   const config = readConfig()
 
   if (command === 'config') {
@@ -19,6 +20,19 @@ async function main(argv) {
 
   if (command === 'help') {
     console.log(USAGE)
+    return
+  }
+
+  if (command === 'branch') {
+    if (!flags.requirement) {
+      throw new Error('branch requires --requirement')
+    }
+
+    const result = await createRequirementBranch({
+      requirement: flags.requirement,
+      base: flags.base || config.defaultBaseBranch,
+    })
+    console.log(JSON.stringify(result, null, 2))
     return
   }
 
