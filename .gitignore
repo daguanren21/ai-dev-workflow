@@ -4,5 +4,8 @@ dist/
 .requirements-mcp.json
 *.tsbuildinfo
 coverage/
+.wxt/
+.output/
+apps/ones-task-splitter/chrome-extension/
 .DS_Store
 Thumbs.db

@@ -104,6 +104,21 @@ function mockTaskResponse(task: Record<string, unknown>) {
   })
 }
 
+function mockRelatedActivitiesResponse(relatedActivities: Record<string, unknown>[]) {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({
+      data: {
+        task: {
+          key: 'task-Nipqc3sbNrswmlcw',
+          relatedActivities,
+          relatedActivitiesCount: relatedActivities.length,
+        },
+      },
+    }),
+  })
+}
+
 function mockWikiContent(content: string, overrides: Record<string, unknown> = {}) {
   mockFetch.mockResolvedValueOnce({
     ok: true,
@@ -265,6 +280,7 @@ describe('onesAdapter', () => {
         name: '匿名需求',
         project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
       }))
+      mockRelatedActivitiesResponse([])
 
       const result = await adapter.getRequirement({ id: 'DEMO-1001' })
 
@@ -327,6 +343,115 @@ describe('onesAdapter', () => {
       expect(result.description).toContain('虚拟用户丁')
     })
 
+    it('should fetch related work items through onesql with the resolved requirement id', async () => {
+      mockLoginFlow()
+      mockProjectList('HYXT', 'project-hyxt-uuid')
+      mockTaskSearch([
+        {
+          key: 'task-Nipqc3sbNrswmlcw',
+          uuid: 'Nipqc3sbNrswmlcw',
+          number: 150446,
+          name: 'MMS 构建工具迁移',
+          issueType: { uuid: 'it-requirement', name: '需求' },
+          status: { uuid: 's1', name: '开发已分派', category: 'in_progress' },
+          project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+        },
+      ])
+      mockTaskResponse(makeRequirementTask({
+        key: 'task-Nipqc3sbNrswmlcw',
+        uuid: 'Nipqc3sbNrswmlcw',
+        number: 150446,
+        name: 'MMS 构建工具迁移',
+        project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+      }))
+      mockRelatedActivitiesResponse([
+        {
+          uuid: 'activity-config-migration',
+          name: 'HYXT-150446 基础配置迁移',
+          projectUUID: 'ppm-project-uuid',
+          project_uuid: 'ppm-project-uuid',
+          relatedChild: 'related-child-uuid',
+          related_child_uuid: 'related-child-uuid',
+        },
+      ])
+
+      const result = await adapter.getRequirement({ id: 'HYXT-150446' })
+
+      const oneSqlCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/workitems/onesql'))
+      expect(oneSqlCall?.[0]).toBe('https://ones.test/project/api/ones-project/team/team-1/workitems/onesql')
+      expect(oneSqlCall?.[1].headers.Authorization).toBe('Bearer test-access-token')
+
+      const requestBody = JSON.parse(String(oneSqlCall?.[1].body))
+      expect(requestBody.variables).toEqual([
+        { key: 'task-Nipqc3sbNrswmlcw' },
+        'Task',
+        null,
+        null,
+      ])
+      expect(result.description).toContain('## Related Work Items')
+      expect(result.description).toContain('HYXT-150446 基础配置迁移')
+      expect(result.description).toContain('activity-config-migration')
+      expect(result.raw.relatedActivities).toEqual([
+        expect.objectContaining({ uuid: 'activity-config-migration' }),
+      ])
+    })
+
+    it('should omit the related work items section when onesql returns no activities', async () => {
+      mockLoginFlow()
+      mockProjectList('HYXT', 'project-hyxt-uuid')
+      mockTaskSearch([{
+        key: 'task-Nipqc3sbNrswmlcw',
+        uuid: 'Nipqc3sbNrswmlcw',
+        number: 150446,
+        name: 'MMS 构建工具迁移',
+        issueType: { uuid: 'it-requirement', name: '需求' },
+        status: { uuid: 's1', name: '开发已分派', category: 'in_progress' },
+        project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+      }])
+      mockTaskResponse(makeRequirementTask({
+        key: 'task-Nipqc3sbNrswmlcw',
+        uuid: 'Nipqc3sbNrswmlcw',
+        number: 150446,
+        name: 'MMS 构建工具迁移',
+      }))
+      mockRelatedActivitiesResponse([])
+
+      const result = await adapter.getRequirement({ id: 'HYXT-150446' })
+
+      expect(result.description).not.toContain('## Related Work Items')
+      expect(result.raw.relatedActivities).toEqual([])
+    })
+
+    it('should report a sanitized onesql error', async () => {
+      mockLoginFlow()
+      mockProjectList('HYXT', 'project-hyxt-uuid')
+      mockTaskSearch([{
+        key: 'task-Nipqc3sbNrswmlcw',
+        uuid: 'Nipqc3sbNrswmlcw',
+        number: 150446,
+        name: 'MMS 构建工具迁移',
+        issueType: { uuid: 'it-requirement', name: '需求' },
+        status: { uuid: 's1', name: '开发已分派', category: 'in_progress' },
+        project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+      }])
+      mockTaskResponse(makeRequirementTask({
+        key: 'task-Nipqc3sbNrswmlcw',
+        uuid: 'Nipqc3sbNrswmlcw',
+        number: 150446,
+        name: 'MMS 构建工具迁移',
+      }))
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve('{"errcode":"NotFound.WorkItemType"}'),
+      })
+
+      const result = adapter.getRequirement({ id: 'HYXT-150446' })
+
+      await expect(result).rejects.toThrow('ONES OneSQL error: 404')
+      await expect(result).rejects.not.toThrow('test-access-token')
+    })
+
     it('should fetch wiki content from an anchor link in task description', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
@@ -375,6 +500,135 @@ describe('onesAdapter', () => {
       expect(result.title).toBe('Wiki wiki-direct-uuid')
       expect(result.description).toContain('## Direct Wiki Requirement')
       expect(result.description).toContain('支持直接粘贴 Wiki 页面 URL 获取需求详情')
+    })
+
+    it('should render tables from a short ONES wiki URL', async () => {
+      mockLoginFlow()
+      mockWikiContent(JSON.stringify({
+        'blocks': [
+          { id: 'table', type: 'table', rows: 2, cols: 2, children: ['cell-1', 'cell-2', 'cell-3', 'cell-4'] },
+        ],
+        'cell-1': [{ id: 'cell-1-text', type: 'text', text: [{ insert: 'Field' }] }],
+        'cell-2': [{ id: 'cell-2-text', type: 'text', text: [{ insert: 'Value' }] }],
+        'cell-3': [{ id: 'cell-3-text', type: 'text', text: [{ insert: 'Mode' }] }],
+        'cell-4': [{ id: 'cell-4-text', type: 'text', text: [{ insert: 'Enabled' }] }],
+      }))
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.test/wiki#/team/team-short-uuid/page/wiki-short-uuid',
+      })
+
+      const graphqlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/items/graphql'))
+      expect(graphqlCalls).toHaveLength(0)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ones.test/wiki/api/wiki/team/team-short-uuid/online_page/wiki-short-uuid/content',
+        { headers: { Authorization: 'Bearer test-access-token' } },
+      )
+      expect(result.description).toContain('| Field | Value |')
+      expect(result.description).toContain('| --- | --- |')
+      expect(result.description).toContain('| Mode | Enabled |')
+      expect(result.description).not.toContain('{"blocks"')
+    })
+
+    it('should preserve a merged ONES wiki table column as HTML', async () => {
+      mockLoginFlow()
+      mockWikiContent(JSON.stringify({
+        'blocks': [{
+          'id': 'table-merged-column',
+          'type': 'table',
+          'rows': 2,
+          'cols': 3,
+          'children': ['cell-wide', 'cell-tail', 'cell-a', 'cell-b', 'cell-c'],
+          'cell-wide_colSpan': 2,
+        }],
+        'cell-wide': [{ id: 'wide-text', type: 'text', text: [{ insert: 'Merged heading' }] }],
+        'cell-tail': [{ id: 'tail-text', type: 'text', text: [{ insert: 'Tail' }] }],
+        'cell-a': [{ id: 'a-text', type: 'text', text: [{ insert: 'A' }] }],
+        'cell-b': [{ id: 'b-text', type: 'text', text: [{ insert: 'B' }] }],
+        'cell-c': [{ id: 'c-text', type: 'text', text: [{ insert: 'C' }] }],
+      }))
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.test/wiki#/team/team-table-uuid/page/wiki-table-uuid',
+      })
+
+      expect(result.description).toContain('<td colspan="2">')
+      expect(result.description).toContain('Merged heading')
+      expect(result.description).toContain('Tail')
+      expect(result.description.match(/Merged heading/g)).toHaveLength(1)
+      expect(result.description).not.toContain('| Merged heading |')
+    })
+
+    it('should preserve a merged ONES wiki table row as HTML', async () => {
+      mockLoginFlow()
+      mockWikiContent(JSON.stringify({
+        'blocks': [{
+          'id': 'table-merged-row',
+          'type': 'table',
+          'rows': 2,
+          'cols': 2,
+          'children': ['cell-tall', 'cell-top', 'cell-missing'],
+          'cell-tall_rowSpan': 2,
+        }],
+        'cell-tall': [{ id: 'tall-text', type: 'text', text: [{ insert: 'Merged side' }] }],
+        'cell-top': [{ id: 'top-text', type: 'text', text: [{ insert: 'Top' }] }],
+      }))
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.test/wiki#/team/team-table-uuid/page/wiki-table-uuid',
+      })
+
+      expect(result.description).toContain('<td rowspan="2">')
+      expect(result.description.match(/Merged side/g)).toHaveLength(1)
+      expect(result.description).toMatch(/<tr>\s*<td><\/td>\s*<\/tr>/)
+      expect(result.description).not.toContain('cell-missing')
+    })
+
+    it('should clamp invalid ONES wiki table spans to table bounds', async () => {
+      mockLoginFlow()
+      mockWikiContent(JSON.stringify({
+        'blocks': [{
+          'id': 'table-invalid-span',
+          'type': 'table',
+          'rows': 1,
+          'cols': 2,
+          'children': ['cell-wide', 'cell-extra'],
+          'cell-wide_colSpan': 99,
+          'cell-wide_rowSpan': -2,
+          'cell-extra_rowSpan': 'invalid',
+        }],
+        'cell-wide': [{ id: 'wide-text', type: 'text', text: [{ insert: '<Unsafe & value>' }] }],
+        'cell-extra': [{ id: 'extra-text', type: 'text', text: [{ insert: 'Extra row' }] }],
+      }))
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.test/wiki#/team/team-table-uuid/page/wiki-table-uuid',
+      })
+
+      expect(result.description).toContain('<td colspan="2">')
+      expect(result.description).not.toContain('rowspan=')
+      expect(result.description).toContain('&lt;Unsafe &amp; value&gt;')
+      expect(result.description).not.toContain('colspan="99"')
+      expect(result.description).toContain('Extra row')
+    })
+
+    it('should preserve a nested ONES wiki table as nested HTML', async () => {
+      mockLoginFlow()
+      mockWikiContent(JSON.stringify({
+        'blocks': [{ id: 'outer-table', type: 'table', rows: 1, cols: 1, children: ['outer-cell'] }],
+        'outer-cell': [{ id: 'inner-table', type: 'table', rows: 1, cols: 2, children: ['inner-a', 'inner-b'] }],
+        'inner-a': [{ id: 'inner-a-text', type: 'text', text: [{ insert: 'Nested A', attributes: { bold: true } }] }],
+        'inner-b': [{ id: 'inner-b-text', type: 'text', text: [{ insert: 'Nested B', attributes: { link: 'https://example.test/nested?a=1&b=2' } }] }],
+      }))
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.test/wiki#/team/team-table-uuid/page/wiki-table-uuid',
+      })
+
+      expect(result.description.match(/<table>/g)).toHaveLength(2)
+      expect(result.description).toContain('<strong>Nested A</strong>')
+      expect(result.description).toContain('<a href="https://example.test/nested?a=1&amp;b=2">Nested B</a>')
+      expect(result.description).not.toContain('| Nested A | Nested B |')
     })
 
     it('should reject a pasted ONES wiki URL without a page route', async () => {

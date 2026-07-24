@@ -15,12 +15,16 @@
     "skills"
   ],
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && pnpm build:workflow-plugin",
+    "build:mcp": "tsdown",
+    "build:workflow-plugin": "tsdown --config plugins/codex-workflow-assistant/tsdown.config.ts",
+    "build:task-splitter": "pnpm --filter @ai-dev-workflow/task-splitter-core build && pnpm --filter ones-task-splitter build",
     "start": "node --env-file=.env ./dist/index.mjs",
     "dev": "node --env-file=.env --loader tsx src/index.ts",
     "inspect": "npx @modelcontextprotocol/inspector node --env-file=.env ./dist/index.mjs",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:task-splitter": "pnpm --filter @ai-dev-workflow/task-splitter-core test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
@@ -44,19 +48,19 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0",
-    "zod": "^4.3.6"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^7.4.2",
-    "@types/node": "^25.2.2",
-    "bumpp": "^10.1.0",
-    "eslint": "^10.0.0",
-    "lint-staged": "^16.2.7",
+    "@antfu/eslint-config": "^9.2.0",
+    "@types/node": "^26.1.1",
+    "bumpp": "^12.0.0",
+    "eslint": "^10.7.0",
+    "lint-staged": "^17.2.0",
     "simple-git-hooks": "^2.13.1",
-    "tsdown": "^0.20.3",
+    "tsdown": "^0.22.14",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.10"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"
