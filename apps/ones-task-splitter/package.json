@@ -1,0 +1,15 @@
+{
+  "name": "ones-task-splitter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "wxt", "build": "wxt build", "test": "vitest run" },
+  "dependencies": {
+    "@ai-dev-workflow/task-splitter-core": "workspace:*",
+    "@wxt-dev/module-react": "^1.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "wxt": "^0.20.6"
+  },
+  "devDependencies": { "@types/react": "^19.0.0", "@types/react-dom": "^19.0.0", "typescript": "^5.9.3", "vitest": "^4.0.18" }
+}

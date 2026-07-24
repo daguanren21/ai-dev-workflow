@@ -63,8 +63,11 @@ export async function fetchGitLabActivity({
   date,
   fetchImpl = fetch,
 }: FetchGitLabActivityOptions): Promise<GitLabActivity> {
-  if (!url || !token || !projectId) {
-    throw new Error('GITLAB_URL, GITLAB_TOKEN, and GITLAB_PROJECT_ID are required')
+  if (!token) {
+    throw new Error('GITLAB_TOKEN is required')
+  }
+  if (!url || !projectId) {
+    throw new Error('GitLab project could not be inferred from git remote; set GITLAB_URL and GITLAB_PROJECT_ID to override')
   }
 
   const encodedProject = encodeURIComponent(projectId)

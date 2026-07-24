@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+
 const VALUE_FLAGS = new Set([
   'base',
   'date',
@@ -29,6 +31,11 @@ export interface WorkflowConfig {
     projectId: string
   }
   redacted: Omit<WorkflowConfig, 'redacted'>
+}
+
+export interface InferredGitLabProject {
+  url: string
+  projectId: string
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -71,6 +78,12 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): WorkflowConfig
     throw new Error('WORKFLOW_DAILY_HOUR_CAP must be a positive number')
   }
 
+  const inferredGitLabProject = inferGitLabProjectFromRemote(
+    env.GIT_REMOTE_URL || readGitRemoteUrl(),
+  )
+  const gitlabUrl = trimTrailingSlash(env.GITLAB_URL || inferredGitLabProject?.url || '')
+  const gitlabProjectId = env.GITLAB_PROJECT_ID || inferredGitLabProject?.projectId || ''
+
   const config = {
     dailyHourCap,
     defaultBaseBranch: env.WORKFLOW_DEFAULT_BASE_BRANCH || 'dev',
@@ -78,9 +91,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): WorkflowConfig
     defaultComplexity: parseDefaultComplexity(env.WORKFLOW_DEFAULT_COMPLEXITY || 'medium'),
     stateDir: env.WORKFLOW_STATE_DIR || '.codex-workflow',
     gitlab: {
-      url: trimTrailingSlash(env.GITLAB_URL || ''),
+      url: gitlabUrl,
       token: env.GITLAB_TOKEN || '',
-      projectId: env.GITLAB_PROJECT_ID || '',
+      projectId: gitlabProjectId,
     },
   }
 
@@ -93,6 +106,97 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): WorkflowConfig
         token: config.gitlab.token ? '<redacted>' : '',
       },
     },
+  }
+}
+
+export function inferGitLabProjectFromRemote(remoteUrl?: string): InferredGitLabProject | undefined {
+  const value = remoteUrl?.trim()
+  if (!value) {
+    return undefined
+  }
+
+  const https = parseHttpRemote(value)
+  if (https) {
+    return https
+  }
+
+  const ssh = parseSshRemote(value)
+  if (ssh) {
+    return ssh
+  }
+
+  return undefined
+}
+
+function parseHttpRemote(remoteUrl: string): InferredGitLabProject | undefined {
+  try {
+    const parsed = new URL(remoteUrl)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined
+    }
+
+    return normalizeRemoteProject({
+      url: `${parsed.protocol}//${parsed.host}`,
+      projectPath: parsed.pathname,
+    })
+  }
+  catch {
+    return undefined
+  }
+}
+
+function parseSshRemote(remoteUrl: string): InferredGitLabProject | undefined {
+  const scpLike = /^git@([^:]+):(.+)$/.exec(remoteUrl)
+  if (scpLike) {
+    return normalizeRemoteProject({
+      url: `https://${scpLike[1]}`,
+      projectPath: scpLike[2],
+    })
+  }
+
+  try {
+    const parsed = new URL(remoteUrl)
+    if (parsed.protocol !== 'ssh:' || parsed.username !== 'git') {
+      return undefined
+    }
+
+    return normalizeRemoteProject({
+      url: `https://${parsed.host}`,
+      projectPath: parsed.pathname,
+    })
+  }
+  catch {
+    return undefined
+  }
+}
+
+function normalizeRemoteProject({ url, projectPath }: {
+  url: string
+  projectPath: string
+}): InferredGitLabProject | undefined {
+  const projectId = projectPath
+    .replace(/^\/+/, '')
+    .replace(/\.git$/, '')
+
+  if (!projectId || !projectId.includes('/')) {
+    return undefined
+  }
+
+  return {
+    url: trimTrailingSlash(url),
+    projectId,
+  }
+}
+
+function readGitRemoteUrl(): string | undefined {
+  try {
+    return execFileSync('git', ['remote', 'get-url', 'origin'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+  }
+  catch {
+    return undefined
   }
 }
 

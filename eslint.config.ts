@@ -7,7 +7,7 @@ export default antfu({
   yaml: false,
   toml: false,
   markdown: false,
-  ignores: ['dist', 'node_modules', 'coverage'],
+  ignores: ['dist', 'node_modules', 'coverage', '.wxt', '.output'],
   rules: {
     'node/prefer-global/buffer': 'off',
     'node/prefer-global/process': 'off',

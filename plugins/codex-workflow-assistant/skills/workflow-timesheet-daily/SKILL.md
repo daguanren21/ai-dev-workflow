@@ -13,17 +13,18 @@ Generate today's work-hour draft for this project. Query GitLab activity, match 
 
 ## Workflow
 
-1. Ensure the helper CLI exists. If `plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs` is missing, run `pnpm build:workflow-plugin`.
-2. Run:
+1. Ensure `GITLAB_TOKEN` is available in the Codex environment. The GitLab URL and project path are inferred from the repository `origin` remote unless explicitly overridden.
+2. Ensure the helper CLI exists. If `plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs` is missing, run `pnpm build:workflow-plugin`.
+3. Run:
 
 ```bash
 node plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs draft --date today
 ```
 
-3. Read the generated markdown summary.
-4. Present each draft entry with task ID, benchmark category, benchmark cap, hours, date, description, evidence, and confidence.
-5. Ask the user to approve, edit, or reject entries.
-6. If the user confirms entries, use `$workflow-timesheet-submit`.
+4. Read the generated markdown summary.
+5. Present each draft entry with task ID, benchmark category, benchmark cap, hours, date, description, evidence, and confidence.
+6. Ask the user to approve, edit, or reject entries.
+7. If the user confirms entries, use `$workflow-timesheet-submit`.
 
 ## Automation Requirements
 

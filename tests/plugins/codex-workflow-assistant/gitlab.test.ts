@@ -50,14 +50,24 @@ describe('gitlab activity client', () => {
     expect(activity.mergeRequests[0].sourceBranch).toBe('req/96706-vxe-table-optimization')
   })
 
-  it('rejects missing GitLab configuration', async () => {
+  it('rejects missing GitLab token separately from inferred repository metadata', async () => {
+    await expect(fetchGitLabActivity({
+      url: 'https://gitlab.example.com',
+      token: '',
+      projectId: 'group/project',
+      date: '2026-06-15',
+      fetchImpl: vi.fn(),
+    })).rejects.toThrow('GITLAB_TOKEN is required')
+  })
+
+  it('rejects missing repository metadata only when it cannot be inferred', async () => {
     await expect(fetchGitLabActivity({
       url: '',
-      token: '',
+      token: 'secret',
       projectId: '',
       date: '2026-06-15',
       fetchImpl: vi.fn(),
-    })).rejects.toThrow('GITLAB_URL, GITLAB_TOKEN, and GITLAB_PROJECT_ID are required')
+    })).rejects.toThrow('GitLab project could not be inferred from git remote; set GITLAB_URL and GITLAB_PROJECT_ID to override')
   })
 })
 

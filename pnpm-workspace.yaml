@@ -1,2 +1,5 @@
 ignoredBuiltDependencies:
   - simple-git-hooks
+packages:
+  - packages/*
+  - apps/*

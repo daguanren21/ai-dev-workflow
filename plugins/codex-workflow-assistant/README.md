@@ -5,9 +5,14 @@ Codex Workflow Assistant starts requirement-driven development workflows, writes
 ## Required Environment
 
 ```text
-GITLAB_URL=https://gitlab.example.com
 GITLAB_TOKEN=glpat-example
-GITLAB_PROJECT_ID=12345
+```
+
+Keep real token values in your local shell, Codex environment, or secret manager. Do not commit them.
+
+The plugin infers `GITLAB_URL` and the GitLab project path from `git remote get-url origin`, and uses these defaults:
+
+```text
 WORKFLOW_DAILY_HOUR_CAP=8
 WORKFLOW_DEFAULT_BASE_BRANCH=dev
 WORKFLOW_DEFAULT_BENCHMARK_CATEGORY=前端-新增组件
@@ -15,7 +20,7 @@ WORKFLOW_DEFAULT_COMPLEXITY=medium
 WORKFLOW_STATE_DIR=.codex-workflow
 ```
 
-Keep real token values in your local shell, Codex environment, or secret manager. Do not commit them.
+Only set `GITLAB_URL` and `GITLAB_PROJECT_ID` when the repository remote does not point at the GitLab project you want to query.
 
 ## Build
 
@@ -39,7 +44,7 @@ Work-hour estimates use the workload reference table as their baseline. A single
 
 The benchmark data is derived from `/Users/liyanchao/工作量评估参考表.xlsx`. The real workbook stays outside Git.
 
-For daily automation, set `WORKFLOW_DEFAULT_BENCHMARK_CATEGORY` and `WORKFLOW_DEFAULT_COMPLEXITY` to the category and level that should be used when a commit or merge request does not explicitly provide a benchmark category.
+For daily automation, pass `--benchmark <category>` and `--complexity <simple|medium|complex>` in the prompt when a day should use a different baseline than the defaults.
 
 ## Start Requirement Work
 

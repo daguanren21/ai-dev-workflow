@@ -79,10 +79,12 @@ async function main() {
   })
 
   // Register tools
-  server.tool(
+  server.registerTool(
     'get_requirement',
-    'Fetch a single requirement/issue by its ID from a configured source (ONES)',
-    GetRequirementSchema.shape,
+    {
+      description: 'Fetch a single requirement/issue by its ID from a configured source (ONES)',
+      inputSchema: GetRequirementSchema.shape,
+    },
     async (params) => {
       try {
         return await handleGetRequirement(params, adapters, config.config.defaultSource)
@@ -96,10 +98,12 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'search_requirements',
-    'Search for requirements/issues by keywords across a configured source',
-    SearchRequirementsSchema.shape,
+    {
+      description: 'Search for requirements/issues by keywords across a configured source',
+      inputSchema: SearchRequirementsSchema.shape,
+    },
     async (params) => {
       try {
         return await handleSearchRequirements(params, adapters, config.config.defaultSource)
@@ -113,10 +117,11 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'list_sources',
-    'List all configured requirement sources and their status',
-    {},
+    {
+      description: 'List all configured requirement sources and their status',
+    },
     async () => {
       try {
         return await handleListSources(adapters, config.config)
@@ -130,10 +135,12 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'get_related_issues',
-    'Get pending defect issues (bugs) related to a requirement task. Returns all pending defects grouped by assignee (current user first).',
-    GetRelatedIssuesSchema.shape,
+    {
+      description: 'Get pending defect issues (bugs) related to a requirement task. Returns all pending defects grouped by assignee (current user first).',
+      inputSchema: GetRelatedIssuesSchema.shape,
+    },
     async (params) => {
       try {
         return await handleGetRelatedIssues(params, adapters, config.config.defaultSource)
@@ -147,10 +154,12 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'get_issue_detail',
-    'Get detailed information about a specific issue/defect including description, rich text, and images',
-    GetIssueDetailSchema.shape,
+    {
+      description: 'Get detailed information about a specific issue/defect including description, rich text, and images',
+      inputSchema: GetIssueDetailSchema.shape,
+    },
     async (params) => {
       try {
         return await handleGetIssueDetail(params, adapters, config.config.defaultSource)
@@ -164,10 +173,12 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'get_testcases',
-    'Get all test cases for a task by its number (e.g. 302). Searches the testcase library for a matching module and returns all cases with steps.',
-    GetTestcasesSchema.shape,
+    {
+      description: 'Get all test cases for a task by its number (e.g. 302). Searches the testcase library for a matching module and returns all cases with steps.',
+      inputSchema: GetTestcasesSchema.shape,
+    },
     async (params) => {
       try {
         return await handleGetTestcases(params, adapters, config.config.defaultSource)
@@ -181,10 +192,12 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'add_manhour',
-    'Add a work-hour record to a ONES task, bug, or requirement. Supports task key, uuid, number, or displayId.',
-    AddManhourSchema.shape,
+    {
+      description: 'Add a work-hour record to a ONES task, bug, or requirement. Supports task key, uuid, number, or displayId.',
+      inputSchema: AddManhourSchema.shape,
+    },
     async (params) => {
       try {
         return await handleAddManhour(params, adapters, config.config.defaultSource)
@@ -198,10 +211,12 @@ async function main() {
     },
   )
 
-  server.tool(
+  server.registerTool(
     'update_task_plan_dates',
-    'Update plan start and/or plan end dates for a ONES task, bug, or requirement. Supports task key, uuid, number, or displayId.',
-    UpdateTaskPlanDatesSchema.shape,
+    {
+      description: 'Update plan start and/or plan end dates for a ONES task, bug, or requirement. Supports task key, uuid, number, or displayId.',
+      inputSchema: UpdateTaskPlanDatesSchema.shape,
+    },
     async (params) => {
       try {
         return await handleUpdateTaskPlanDates(params, adapters, config.config.defaultSource)

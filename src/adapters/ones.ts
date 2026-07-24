@@ -53,6 +53,15 @@ interface OnesRelatedTask {
   assign?: { uuid: string, name: string } | null
 }
 
+interface OnesRelatedActivity {
+  uuid: string
+  name: string
+  projectUUID?: string
+  project_uuid?: string
+  relatedChild?: string
+  related_child_uuid?: string
+}
+
 interface OnesIssueTypeNode {
   uuid: string
   name: string
@@ -104,6 +113,7 @@ interface OnesSession {
 }
 
 interface OnesWikiBlock {
+  [key: string]: unknown
   id?: string
   type?: string
   heading?: number
@@ -114,7 +124,22 @@ interface OnesWikiBlock {
   embedType?: string
   embedData?: unknown
   children?: unknown
+  rows?: number
   cols?: number
+}
+
+interface WikiTableCellPlacement {
+  childId: string
+  row: number
+  column: number
+  rowSpan: number
+  colSpan: number
+}
+
+interface WikiTableLayout {
+  columnCount: number
+  rows: WikiTableCellPlacement[][]
+  hasMergedCells: boolean
 }
 
 interface OnesWikiContentResponse {
@@ -194,6 +219,27 @@ const TASK_DETAIL_QUERY = `
       }
       relatedWikiPagesCount
     }
+  }
+`
+
+const RELATED_ACTIVITIES_QUERY = `
+  query Task($key: Key) {
+    task(key: $key) {
+      key
+      ...RelatedActivities_task1
+    }
+  }
+
+  fragment RelatedActivities_task1 on Task {
+    relatedActivities {
+      uuid
+      name
+      projectUUID
+      project_uuid: projectUUID
+      relatedChild
+      related_child_uuid: relatedChild
+    }
+    relatedActivitiesCount
   }
 `
 
@@ -551,7 +597,7 @@ function extractWikiPageUuidsFromText(text: string): string[] {
 }
 
 function parseOnesWikiPageRoute(input: string): OnesWikiPageRoute | null {
-  if (!input.includes('/wiki/'))
+  if (!isOnesWikiUrlInput(input))
     return null
 
   const routeText = (() => {
@@ -564,7 +610,7 @@ function parseOnesWikiPageRoute(input: string): OnesWikiPageRoute | null {
     }
   })()
 
-  const match = routeText.match(/\/team\/([^/?#]+)\/space\/[^/?#]+\/page\/([^/?#]+)/)
+  const match = routeText.match(/\/team\/([^/?#]+)\/(?:space\/[^/?#]+\/)?page\/([^/?#]+)/)
   if (!match?.[1] || !match[2])
     return null
 
@@ -575,7 +621,7 @@ function parseOnesWikiPageRoute(input: string): OnesWikiPageRoute | null {
 }
 
 function isOnesWikiUrlInput(input: string): boolean {
-  return input.includes('/wiki/')
+  return /\/wiki(?:\/|(?=[#?]|$))/.test(input)
 }
 
 function parseAuthorizeRequestId(location: string): string | null {
@@ -783,6 +829,177 @@ function escapeWikiTableCell(value: string): string {
   return value.replace(/\|/g, '\\|').replace(/[ \t]*\n+[ \t]*/g, ' ').trim()
 }
 
+function escapeWikiHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function parseWikiTableSpan(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+    return 1
+
+  return Math.max(Math.trunc(value), 1)
+}
+
+function buildWikiTableLayout(block: OnesWikiBlock): WikiTableLayout | null {
+  const columnCount = typeof block.cols === 'number' && block.cols > 0
+    ? Math.trunc(block.cols)
+    : 0
+  const children = Array.isArray(block.children)
+    ? block.children.filter((child): child is string => typeof child === 'string')
+    : []
+
+  if (!columnCount || !children.length)
+    return null
+
+  const hasDeclaredRows = typeof block.rows === 'number' && block.rows > 0
+  const initialRowCount = hasDeclaredRows
+    ? Math.trunc(block.rows as number)
+    : Math.max(Math.ceil(children.length / columnCount), 1)
+  const occupied: boolean[][] = []
+  const rows: WikiTableCellPlacement[][] = []
+  const ensureRowCount = (count: number) => {
+    while (occupied.length < count) {
+      occupied.push(Array.from({ length: columnCount }, () => false))
+      rows.push([])
+    }
+  }
+  ensureRowCount(initialRowCount)
+  let cursor = 0
+  let hasMergedCells = false
+
+  for (const childId of children) {
+    while (true) {
+      const row = Math.floor(cursor / columnCount)
+      const column = cursor % columnCount
+      ensureRowCount(row + 1)
+      if (!occupied[row]![column])
+        break
+      cursor += 1
+    }
+
+    const row = Math.floor(cursor / columnCount)
+    const column = cursor % columnCount
+    const requestedRowSpan = parseWikiTableSpan(block[`${childId}_rowSpan`])
+    if (!hasDeclaredRows)
+      ensureRowCount(row + requestedRowSpan)
+    const rowSpan = Math.min(requestedRowSpan, occupied.length - row)
+    const colSpan = Math.min(
+      parseWikiTableSpan(block[`${childId}_colSpan`]),
+      columnCount - column,
+    )
+    hasMergedCells ||= rowSpan > 1 || colSpan > 1
+    rows[row]!.push({ childId, row, column, rowSpan, colSpan })
+
+    for (let rowOffset = 0; rowOffset < rowSpan; rowOffset += 1) {
+      for (let columnOffset = 0; columnOffset < colSpan; columnOffset += 1)
+        occupied[row + rowOffset]![column + columnOffset] = true
+    }
+    cursor += 1
+  }
+
+  return { columnCount, rows, hasMergedCells }
+}
+
+function wikiCellContainsTable(value: unknown): boolean {
+  return asWikiBlocks(value).some(block => block.type === 'table')
+}
+
+function renderWikiTextRunsHtml(value: unknown): string {
+  if (!Array.isArray(value))
+    return ''
+
+  return value.map((run) => {
+    if (!isRecord(run))
+      return ''
+
+    const attributes = isRecord(run.attributes) ? run.attributes : {}
+    const insert = typeof run.insert === 'string'
+      ? run.insert.replace(/\u00A0/g, ' ')
+      : ''
+    let content = escapeWikiHtml(insert).replace(/\n/g, '<br>')
+
+    if (attributes.code)
+      content = `<code>${content}</code>`
+    if (attributes.bold)
+      content = `<strong>${content}</strong>`
+    if (attributes.italic)
+      content = `<em>${content}</em>`
+    if (attributes.underline)
+      content = `<u>${content}</u>`
+    if (attributes.strike)
+      content = `<s>${content}</s>`
+
+    const link = typeof attributes.link === 'string' ? attributes.link : ''
+    return link ? `<a href="${escapeWikiHtml(link)}">${content}</a>` : content
+  }).join('')
+}
+
+function renderWikiCellHtml(
+  value: unknown,
+  document: Record<string, unknown>,
+  context: WikiRenderContext,
+): string {
+  return asWikiBlocks(value)
+    .map(block => renderWikiBlockHtml(block, document, context))
+    .filter(Boolean)
+    .join('')
+}
+
+function renderWikiBlockHtml(
+  block: OnesWikiBlock,
+  document: Record<string, unknown>,
+  context: WikiRenderContext,
+): string {
+  if (block.type === 'table') {
+    const layout = buildWikiTableLayout(block)
+    return layout ? renderWikiTableHtml(layout, document, context) : ''
+  }
+
+  if (block.type === 'embed')
+    return `<p>${escapeWikiHtml(renderWikiEmbed(block, context))}</p>`
+
+  const text = renderWikiTextRunsHtml(block.text)
+  if (!text)
+    return ''
+
+  if (block.type === 'list') {
+    const tag = block.ordered ? 'ol' : 'ul'
+    return `<${tag}><li>${text}</li></${tag}>`
+  }
+
+  if (block.heading) {
+    const level = Math.min(Math.max(Math.trunc(block.heading), 1), 6)
+    return `<h${level}>${text}</h${level}>`
+  }
+
+  return `<p>${text}</p>`
+}
+
+function renderWikiTableHtml(
+  layout: WikiTableLayout,
+  document: Record<string, unknown>,
+  context: WikiRenderContext,
+): string {
+  const rows = layout.rows.map((row) => {
+    const cells = row.map((cell) => {
+      const attributes = [
+        cell.rowSpan > 1 ? `rowspan="${cell.rowSpan}"` : '',
+        cell.colSpan > 1 ? `colspan="${cell.colSpan}"` : '',
+      ].filter(Boolean)
+      const content = renderWikiCellHtml(document[cell.childId], document, context)
+      return `<td${attributes.length ? ` ${attributes.join(' ')}` : ''}>${content}</td>`
+    })
+    return `<tr>\n${cells.join('\n')}\n</tr>`
+  })
+
+  return `<table>\n<tbody>\n${rows.join('\n')}\n</tbody>\n</table>`
+}
+
 function renderWikiCell(value: unknown, document: Record<string, unknown>, context: WikiRenderContext): string {
   const blocks = asWikiBlocks(value)
   if (!blocks.length)
@@ -797,28 +1014,27 @@ function renderWikiCell(value: unknown, document: Record<string, unknown>, conte
 }
 
 function renderWikiTable(block: OnesWikiBlock, document: Record<string, unknown>, context: WikiRenderContext): string {
-  const cols = typeof block.cols === 'number' && block.cols > 0
-    ? Math.trunc(block.cols)
-    : 0
-  const children = Array.isArray(block.children)
-    ? block.children.filter((child): child is string => typeof child === 'string')
-    : []
-
-  if (!cols || !children.length)
+  const layout = buildWikiTableLayout(block)
+  if (!layout)
     return ''
 
+  const hasNestedTable = layout.rows.some(row => row.some(
+    cell => wikiCellContainsTable(document[cell.childId]),
+  ))
+
+  if (layout.hasMergedCells || hasNestedTable)
+    return renderWikiTableHtml(layout, document, context)
+
   const rows: string[] = []
-  for (let index = 0; index < children.length; index += cols) {
-    const rowChildren = children.slice(index, index + cols)
-    const cells = rowChildren.map(childId => escapeWikiTableCell(renderWikiCell(document[childId], document, context)))
-    while (cells.length < cols) {
-      cells.push('')
-    }
+  for (const row of layout.rows) {
+    const cells = Array.from({ length: layout.columnCount }, () => '')
+    for (const cell of row)
+      cells[cell.column] = escapeWikiTableCell(renderWikiCell(document[cell.childId], document, context))
     rows.push(`| ${cells.join(' | ')} |`)
   }
 
   if (rows.length > 1) {
-    rows.splice(1, 0, `| ${Array.from({ length: cols }, () => '---').join(' | ')} |`)
+    rows.splice(1, 0, `| ${Array.from({ length: layout.columnCount }, () => '---').join(' | ')} |`)
   }
 
   return rows.join('\n')
@@ -1151,6 +1367,42 @@ export class OnesAdapter extends BaseAdapter {
     }
 
     return response.json() as Promise<T>
+  }
+
+  private async onesql<T>(query: string, variables: Record<string, unknown>, workItemType: string): Promise<T> {
+    const session = await this.login()
+    const url = `${this.config.apiBase}/project/api/ones-project/team/${session.teamUuid}/workitems/onesql`
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        variables: [variables, workItemType, null, null],
+      }),
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      throw new Error(`ONES OneSQL error: ${response.status} ${text}`)
+    }
+
+    return response.json() as Promise<T>
+  }
+
+  private async fetchRelatedActivities(taskKey: string): Promise<OnesRelatedActivity[]> {
+    const data = await this.onesql<{
+      data?: {
+        task?: {
+          relatedActivities?: OnesRelatedActivity[]
+        } | null
+      }
+    }>(RELATED_ACTIVITIES_QUERY, { key: taskKey }, 'Task')
+
+    return data.data?.task?.relatedActivities ?? []
   }
 
   private async searchTaskByNumber(taskNumber: number): Promise<OnesTaskNode | null> {
@@ -1557,6 +1809,7 @@ export class OnesAdapter extends BaseAdapter {
     }
 
     const taskRef = await this.resolveTaskRef(params.id)
+    const shouldFetchRelatedActivities = parseDisplayId(params.id.trim()) !== null
 
     // Fetch GraphQL data (structure, relations, wiki pages)
     const graphqlData = await this.graphql<{ data?: { task?: OnesTaskNode } }>(
@@ -1569,6 +1822,10 @@ export class OnesAdapter extends BaseAdapter {
     if (!task) {
       throw new Error(`ONES: Task "${params.id}" not found`)
     }
+
+    const relatedActivities = shouldFetchRelatedActivities
+      ? await this.fetchRelatedActivities(taskRef.key)
+      : []
 
     // Fetch wiki page content for related requirement docs (in parallel).
     // Wiki links may come from ONES relations or be pasted directly into the task description.
@@ -1621,6 +1878,19 @@ export class OnesAdapter extends BaseAdapter {
       }
     }
 
+    if (relatedActivities.length) {
+      parts.push('')
+      parts.push('## Related Work Items')
+      for (const activity of relatedActivities) {
+        const details = [
+          `UUID: ${activity.uuid}`,
+          activity.projectUUID ? `Project: ${activity.projectUUID}` : null,
+          activity.relatedChild ? `Relation: ${activity.relatedChild}` : null,
+        ].filter(Boolean)
+        parts.push(`- ${activity.name} (${details.join(', ')})`)
+      }
+    }
+
     // Parent task
     if (task.parent?.uuid) {
       parts.push('')
@@ -1663,6 +1933,10 @@ export class OnesAdapter extends BaseAdapter {
 
     const wikiAttachments = wikiContents.flatMap(wiki => wiki.attachments)
     const req = toRequirement(task, parts.join('\n'), wikiAttachments)
+    req.raw = {
+      ...req.raw,
+      relatedActivities,
+    }
 
     return req
   }

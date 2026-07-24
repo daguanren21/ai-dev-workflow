@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseArgs, readConfig } from '../../../plugins/codex-workflow-assistant/scripts/src/lib/env.ts'
+import { inferGitLabProjectFromRemote, parseArgs, readConfig } from '../../../plugins/codex-workflow-assistant/scripts/src/lib/env.ts'
 
 describe('workflow env helpers', () => {
   it('parses command arguments with flags', () => {
@@ -33,5 +33,32 @@ describe('workflow env helpers', () => {
     expect(config.defaultBenchmarkCategory).toBe('后端-新增CRUD模块')
     expect(config.defaultComplexity).toBe('complex')
     expect(JSON.stringify(config.redacted)).not.toContain('glpat-secret')
+  })
+
+  it('uses built-in defaults when only the GitLab token is configured', () => {
+    const config = readConfig({
+      GITLAB_TOKEN: 'glpat-secret',
+    })
+
+    expect(config.gitlab.token).toBe('glpat-secret')
+    expect(config.dailyHourCap).toBe(8)
+    expect(config.defaultBaseBranch).toBe('dev')
+    expect(config.defaultBenchmarkCategory).toBe('前端-新增组件')
+    expect(config.defaultComplexity).toBe('medium')
+    expect(config.stateDir).toBe('.codex-workflow')
+  })
+
+  it('infers GitLab host and project path from SSH remotes', () => {
+    expect(inferGitLabProjectFromRemote('git@gitlab.example.com:group/sub-group/project.git')).toEqual({
+      url: 'https://gitlab.example.com',
+      projectId: 'group/sub-group/project',
+    })
+  })
+
+  it('infers GitLab host and project path from HTTPS remotes', () => {
+    expect(inferGitLabProjectFromRemote('https://gitlab.example.com/group/project.git')).toEqual({
+      url: 'https://gitlab.example.com',
+      projectId: 'group/project',
+    })
   })
 })
