@@ -864,7 +864,7 @@ function buildWikiTableLayout(block: OnesWikiBlock): WikiTableLayout | null {
   const rows: WikiTableCellPlacement[][] = []
   const ensureRowCount = (count: number) => {
     while (occupied.length < count) {
-      occupied.push(Array.from({ length: columnCount }, () => false))
+      occupied.push(Array.from<boolean>({ length: columnCount }).fill(false))
       rows.push([])
     }
   }
@@ -1027,14 +1027,14 @@ function renderWikiTable(block: OnesWikiBlock, document: Record<string, unknown>
 
   const rows: string[] = []
   for (const row of layout.rows) {
-    const cells = Array.from({ length: layout.columnCount }, () => '')
+    const cells = Array.from<string>({ length: layout.columnCount }).fill('')
     for (const cell of row)
       cells[cell.column] = escapeWikiTableCell(renderWikiCell(document[cell.childId], document, context))
     rows.push(`| ${cells.join(' | ')} |`)
   }
 
   if (rows.length > 1) {
-    rows.splice(1, 0, `| ${Array.from({ length: layout.columnCount }, () => '---').join(' | ')} |`)
+    rows.splice(1, 0, `| ${Array.from<string>({ length: layout.columnCount }).fill('---').join(' | ')} |`)
   }
 
   return rows.join('\n')
