@@ -2,7 +2,7 @@
   "name": "ai-dev-workflow",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@10.28.1",
+  "packageManager": "pnpm@10.34.5",
   "description": "Workspace for the ai-dev-requirements MCP server and development workflow tools",
   "type": "module",
   "scripts": {
