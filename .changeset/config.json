@@ -11,6 +11,10 @@
   ],
   "commit": false,
   "ignore": [],
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  },
   "fixed": [],
   "linked": [],
   "updateInternalDependencies": "patch"
