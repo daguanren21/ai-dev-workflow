@@ -1,6 +1,8 @@
 import type { BaseAdapter } from '../adapters/base.js'
 import type { IssueDetail } from '../types/requirement.js'
 import { z } from 'zod/v4'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
+import { downloadTrustedImages } from '../utils/safe-image.js'
 
 export const GetIssueDetailSchema = z.object({
   issueId: z.string().describe('The issue task ID or key (e.g. "mock-issue-uuid" or "task-mock-issue-uuid")'),
@@ -8,26 +10,6 @@ export const GetIssueDetailSchema = z.object({
 })
 
 export type GetIssueDetailInput = z.infer<typeof GetIssueDetailSchema>
-
-/**
- * Download an image from URL and return as base64 data URI.
- * Returns null if download fails.
- */
-async function downloadImageAsBase64(url: string): Promise<{ base64: string, mimeType: string } | null> {
-  try {
-    const res = await fetch(url, { redirect: 'follow' })
-    if (!res.ok)
-      return null
-
-    const contentType = res.headers.get('content-type') ?? 'image/png'
-    const mimeType = contentType.split(';')[0].trim()
-    const buffer = Buffer.from(await res.arrayBuffer())
-    return { base64: buffer.toString('base64'), mimeType }
-  }
-  catch {
-    return null
-  }
-}
 
 /**
  * Extract image URLs from HTML string.
@@ -57,9 +39,10 @@ export async function handleGetIssueDetail(
 
   const detail = await adapter.getIssueDetail({ issueId: input.issueId })
 
-  // Extract and download images from description
   const imageUrls = detail.descriptionRich ? extractImageUrls(detail.descriptionRich) : []
-  const imageResults = await Promise.all(imageUrls.map(url => downloadImageAsBase64(url)))
+  const imageResults = await downloadTrustedImages(imageUrls, {
+    classifyUrl: url => adapter.classifyRemoteImageUrl(url),
+  })
 
   // Build MCP content: text first, then embedded images
   const content: Array<{ type: 'text', text: string } | { type: 'image', data: string, mimeType: string }> = [
@@ -81,37 +64,38 @@ export async function handleGetIssueDetail(
 }
 
 function formatIssueDetail(detail: IssueDetail): string {
+  const description = sanitizeExternalText(
+    detail.descriptionText || detail.description || detail.descriptionRich,
+  )
   const lines = [
-    `# ${detail.name}`,
+    `# ${sanitizeExternalInline(detail.name)}`,
     '',
-    `- **Key**: ${detail.key}`,
-    `- **UUID**: ${detail.uuid}`,
-    `- **Type**: ${detail.issueTypeName}`,
-    `- **Status**: ${detail.statusName} (${detail.statusCategory})`,
-    `- **Priority**: ${detail.priorityValue ?? 'N/A'}`,
-    `- **Severity**: ${detail.severityLevel ?? 'N/A'}`,
-    `- **Assignee**: ${detail.assignName ?? 'Unassigned'}`,
-    `- **Owner**: ${detail.ownerName ?? 'Unknown'}`,
-    `- **Solver**: ${detail.solverName ?? 'Unassigned'}`,
+    `- **Key**: ${sanitizeExternalInline(detail.key)}`,
+    `- **UUID**: ${sanitizeExternalInline(detail.uuid)}`,
+    `- **Type**: ${sanitizeExternalInline(detail.issueTypeName)}`,
+    `- **Status**: ${sanitizeExternalInline(detail.statusName)} (${sanitizeExternalInline(detail.statusCategory)})`,
+    `- **Priority**: ${sanitizeExternalInline(detail.priorityValue ?? 'N/A')}`,
+    `- **Severity**: ${sanitizeExternalInline(detail.severityLevel ?? 'N/A')}`,
+    `- **Assignee**: ${sanitizeExternalInline(detail.assignName ?? 'Unassigned')}`,
+    `- **Owner**: ${sanitizeExternalInline(detail.ownerName ?? 'Unknown')}`,
+    `- **Solver**: ${sanitizeExternalInline(detail.solverName ?? 'Unassigned')}`,
   ]
 
   if (detail.projectName)
-    lines.push(`- **Project**: ${detail.projectName}`)
+    lines.push(`- **Project**: ${sanitizeExternalInline(detail.projectName)}`)
   if (detail.sprintName)
-    lines.push(`- **Sprint**: ${detail.sprintName}`)
+    lines.push(`- **Sprint**: ${sanitizeExternalInline(detail.sprintName)}`)
   if (detail.deadline)
-    lines.push(`- **Deadline**: ${detail.deadline}`)
+    lines.push(`- **Deadline**: ${sanitizeExternalInline(detail.deadline)}`)
 
-  lines.push('', '## Description', '')
-  if (detail.descriptionRich) {
-    lines.push(detail.descriptionRich)
-  }
-  else if (detail.descriptionText) {
-    lines.push(detail.descriptionText)
-  }
-  else {
-    lines.push('_No description_')
-  }
+  lines.push(
+    '',
+    '## Untrusted ONES Description',
+    '',
+    UNTRUSTED_SOURCE_NOTICE,
+    '',
+    description || '_No description_',
+  )
 
   return lines.join('\n')
 }

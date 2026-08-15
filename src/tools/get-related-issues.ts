@@ -1,6 +1,7 @@
 import type { BaseAdapter } from '../adapters/base.js'
 import type { RelatedIssue } from '../types/requirement.js'
 import { z } from 'zod/v4'
+import { sanitizeExternalInline, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
 
 export const GetRelatedIssuesSchema = z.object({
   taskId: z.string().describe('The parent task ID or key (e.g. "mock-task-uuid" or "task-mock-task-uuid")'),
@@ -37,6 +38,8 @@ function formatRelatedIssues(issues: RelatedIssue[]): string {
   const lines = [
     `Found **${issues.length}** pending defects:`,
     '',
+    UNTRUSTED_SOURCE_NOTICE,
+    '',
   ]
 
   if (issues.length === 0) {
@@ -47,7 +50,7 @@ function formatRelatedIssues(issues: RelatedIssue[]): string {
   // Group by assignee name
   const grouped = new Map<string, RelatedIssue[]>()
   for (const issue of issues) {
-    const assignee = issue.assignName ?? 'Unassigned'
+    const assignee = sanitizeExternalInline(issue.assignName ?? 'Unassigned')
     if (!grouped.has(assignee))
       grouped.set(assignee, [])
     grouped.get(assignee)!.push(issue)
@@ -57,10 +60,10 @@ function formatRelatedIssues(issues: RelatedIssue[]): string {
     lines.push(`## ${assignee} (${group.length})`)
     lines.push('')
     for (const issue of group) {
-      lines.push(`### ${issue.key}: ${issue.name}`)
-      lines.push(`- Status: ${issue.statusName} | Priority: ${issue.priorityValue ?? 'N/A'}`)
+      lines.push(`### ${sanitizeExternalInline(issue.key)}: ${sanitizeExternalInline(issue.name)}`)
+      lines.push(`- Status: ${sanitizeExternalInline(issue.statusName)} | Priority: ${sanitizeExternalInline(issue.priorityValue ?? 'N/A')}`)
       if (issue.projectName) {
-        lines.push(`- Project: ${issue.projectName}`)
+        lines.push(`- Project: ${sanitizeExternalInline(issue.projectName)}`)
       }
       lines.push('')
     }

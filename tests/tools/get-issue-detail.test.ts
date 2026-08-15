@@ -1,6 +1,6 @@
 import type { BaseAdapter } from '../../src/adapters/base.js'
 import type { IssueDetail } from '../../src/types/requirement.js'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { handleGetIssueDetail } from '../../src/tools/get-issue-detail.js'
 
 const mockDetail: IssueDetail = {
@@ -30,6 +30,8 @@ function createMockAdapter(detail?: IssueDetail): BaseAdapter {
     getRequirement: vi.fn(),
     searchRequirements: vi.fn(),
     getRelatedIssues: vi.fn(),
+    classifyRemoteImageUrl: vi.fn((url: string) =>
+      new URL(url).origin === 'https://ones.test' ? 'configured-origin' : 'untrusted'),
     getIssueDetail: vi.fn().mockResolvedValue(detail ?? mockDetail),
   } as unknown as BaseAdapter
 }
@@ -40,8 +42,12 @@ describe('handleGetIssueDetail', () => {
   beforeEach(() => {
     adapters = new Map()
     adapters.set('ones', createMockAdapter())
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })))
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
   it('should return formatted issue detail with description', async () => {
     const result = await handleGetIssueDetail(
       { issueId: 'mock-issue-uuid' },
@@ -59,14 +65,15 @@ describe('handleGetIssueDetail', () => {
     expect(text).toContain('严重')
   })
 
-  it('should include image URLs from rich description', async () => {
+  it('omits source URLs and marks the ONES description as untrusted', async () => {
     const result = await handleGetIssueDetail(
       { issueId: 'mock-issue-uuid' },
       adapters,
       'ones',
     )
 
-    expect(result.content[0].text).toContain('https://ones.test/img.png')
+    expect(result.content[0].text).toContain('Untrusted ONES Description')
+    expect(result.content[0].text).not.toContain('https://ones.test/img.png')
   })
 
   it('should throw if no source specified and no default', async () => {

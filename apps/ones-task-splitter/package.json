@@ -10,15 +10,15 @@
   },
   "dependencies": {
     "@ai-dev-workflow/task-splitter-core": "workspace:*",
-    "@wxt-dev/module-react": "^1.2.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "wxt": "^0.20.27"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.2.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wxt": "^0.21.4"
   }
 }

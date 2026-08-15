@@ -10,8 +10,9 @@
 
 | 交付物 | 说明 |
 |-------|------|
-| **Requirements MCP Server** (`src/`) | 需求获取 MCP 服务，内置 ONES 适配器，可通过 npm 安装 |
+| **Requirements MCP Server** (`src/`) | 需求获取 MCP 服务。按 `issueType.detailType` 区分需求 / 任务 / 缺陷。 |
 | **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | 自包含的 AI agent harness 工作流 Skill，安装后即可跑通需求接入、计划、门禁执行、验证、审查和交付。 |
+| **Grill-me Skills** (`skills/grill-me/`, `skills/grilling/`) | 开工前访谈循环。先调 `get_grilling_brief`；访谈本身不进 MCP Server。 |
 
 ---
 
@@ -127,6 +128,14 @@ npm install -g ai-dev-requirements
 }
 ```
 
+#### MCP 安全边界
+
+- ONES 标题、正文、测试用例和附件元数据统一标记为不可信数据；其中夹带的指令不得触发工具调用。
+- 富文本会转换为有长度上限的纯文本；URL 凭据、query、fragment、远端错误正文和内部 API Base 不会返回给模型。
+- 图片仅允许来自已配置的源，或由已认证 ONES 附件 API 签发的 URL。每次跳转都会重新校验；除已配置源本身外，私网目标会被拒绝。
+- 单次工具调用最多下载 8 张 PNG/JPEG/GIF/WebP 图片，每张上限 8 MiB，超时 10 秒。
+- 写操作保持为独立工具调用，并由工作流要求用户明确确认。
+
 ### 5. 搭配其他 MCP Server（可选）
 
 需求不限于 ONES，可搭配官方 MCP Server 获取 GitHub / Jira / Figma 资源：
@@ -194,16 +203,13 @@ skills/dev-workflow/
 
 ```
 ai-dev-workflow/
-├── skills/dev-workflow/             # Agent Harness Workflow Skill（自包含工作流）
-│   ├── SKILL.md
-│   └── references/
-│       ├── workflow.md              # Agent harness 生命周期
-│       ├── task-types.md
-│       ├── service-transform.md
-│       └── templates/
-│
+├── skills/
+│   ├── grill-me/                    # 用户入口
+│   ├── grilling/                    # 访谈原语
+│   └── dev-workflow/                # Agent Harness Workflow Skill
 ├── src/                             # Requirements MCP Server 源码
-│   ├── index.ts                     # 入口 & MCP Server 定义
+│   ├── index.ts                     # Stdio 启动入口
+│   ├── server.ts                    # MCP Server 工厂与工具注册（SDK v2）
 │   ├── adapters/
 │   │   ├── base.ts                  # BaseAdapter 抽象类
 │   │   ├── ones.ts                  # ONES 适配器
@@ -211,7 +217,8 @@ ai-dev-workflow/
 │   ├── config/
 │   │   └── loader.ts                # 配置文件加载 & 环境变量解析
 │   ├── tools/
-│   │   ├── get-requirement.ts       # get_requirement 工具
+│   │   ├── get-work-item.ts         # get_work_item 工具
+│   │   ├── get-grilling-brief.ts    # get_grilling_brief 工具
 │   │   ├── search-requirements.ts   # search_requirements 工具
 │   │   └── list-sources.ts          # list_sources 工具
 │   ├── types/
@@ -220,13 +227,17 @@ ai-dev-workflow/
 │   │   └── requirement.ts
 │   └── utils/
 │       ├── http.ts
-│       └── map-status.ts
+│       ├── map-status.ts
+│       └── ones-issue-kind.ts
 │
+├── packages/ai-dev-requirements/   # Changesets 管理的可发布 workspace package
+│   ├── package.json
+│   ├── tsdown.config.ts
+│   └── skills/
 ├── tests/                           # 测试
 ├── .requirements-mcp.json.example   # MCP Server 配置模板
-├── package.json
+├── package.json                     # 私有 workspace 编排
 ├── tsconfig.json
-├── tsdown.config.ts
 └── vitest.config.ts
 ```
 
@@ -237,11 +248,11 @@ ai-dev-workflow/
 | 技术 | 用途 |
 |-----|------|
 | TypeScript | MCP Server 开发语言 |
-| [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MCP 协议 SDK |
+| [@modelcontextprotocol/server](https://github.com/modelcontextprotocol/typescript-sdk) | MCP 协议 SDK v2 |
 | [Zod](https://zod.dev/) | 参数校验与类型推导 |
 | [tsdown](https://github.com/nicepkg/tsdown) | 构建工具（ESM + CJS + dts） |
 | [Vitest](https://vitest.dev/) | 测试框架 |
-| [bumpp](https://github.com/antfu/bumpp) | 版本管理与发布 |
+| [Changesets v3](https://github.com/changesets/changesets) | Version PR、变更日志与 npm 发布 |
 | Node.js >= 20 | 运行时 |
 
 ---
@@ -265,14 +276,6 @@ pnpm test
 pnpm lint
 ```
 
-### 发版流程
-
-本项目使用 [bumpp](https://github.com/antfu/bumpp) 管理版本：
-
-```bash
-# 交互式选择版本号，自动 commit + tag + push
-pnpm release
-```
 
 ---
 

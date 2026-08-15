@@ -1,5 +1,6 @@
 import type { BaseAdapter } from '../adapters/base.js'
 import { z } from 'zod/v4'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
 
 export const SearchRequirementsSchema = z.object({
   query: z.string().describe('Search keywords'),
@@ -40,22 +41,25 @@ export async function handleSearchRequirements(
   const lines = [
     `Found **${result.total}** items (page ${result.page}/${Math.ceil(result.total / result.pageSize) || 1}):`,
     '',
+    UNTRUSTED_SOURCE_NOTICE,
+    '',
   ]
 
   if (/\u6211.*\u7F3A\u9677|bug|\u6211.*\u4EFB\u52A1/i.test(input.query)) {
-    lines.push(`Query: ${input.query}`)
+    lines.push(`Query: ${sanitizeExternalInline(input.query)}`)
     lines.push('Use an item ID or number in the next step to fetch detail.')
     lines.push('')
   }
 
   for (const item of result.items) {
-    lines.push(`### ${formatStatusMarker(item.status)} ${item.id}: ${item.title}`)
-    lines.push(`- Status: ${item.status} | Priority: ${item.priority} | Type: ${item.type}`)
-    lines.push(`- Assignee: ${item.assignee ?? 'Unassigned'}`)
-    const desc = item.description
-      ? (item.description.length > 200 ? `${item.description.slice(0, 200)}...` : item.description)
+    const description = sanitizeExternalText(item.description)
+    const summary = description
+      ? (description.length > 200 ? `${description.slice(0, 200)}...` : description)
       : '(empty)'
-    lines.push(`- Content: ${desc}`)
+    lines.push(`### ${formatStatusMarker(item.status)} ${sanitizeExternalInline(item.id)}: ${sanitizeExternalInline(item.title)}`)
+    lines.push(`- Status: ${sanitizeExternalInline(item.status)} | Priority: ${sanitizeExternalInline(item.priority)} | Type: ${sanitizeExternalInline(item.type)}`)
+    lines.push(`- Assignee: ${sanitizeExternalInline(item.assignee ?? 'Unassigned')}`)
+    lines.push(`- Content: ${summary}`)
     lines.push('')
   }
 

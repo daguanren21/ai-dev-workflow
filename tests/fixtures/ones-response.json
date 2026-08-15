@@ -175,6 +175,7 @@
     "data": {
       "task": {
         "key": "task-mock-parent-task-uuid",
+        "issueType": { "uuid": "it-requirement", "name": "需求", "detailType": 1 },
         "relatedTasks": [
           {
             "key": "task-bug-001",
@@ -261,7 +262,7 @@
     "data": {
       "buckets": [{
         "key": "default",
-        "tasks": [{ "key": "task-test-task-100", "uuid": "test-task-100", "number": 100, "name": "#100 功能模块重构" }]
+        "tasks": [{ "key": "task-test-task-100", "uuid": "test-task-100", "number": 100, "name": "#100 功能模块重构", "issueType": { "uuid": "it-task", "name": "任务", "detailType": 2 } }]
       }]
     }
   },
@@ -274,8 +275,8 @@
         "description": "<p>用户在登录页面输入正确密码后点击登录，页面崩溃。</p><p><img src=\"https://ones.test/attachment/img1.png\" /></p>",
         "descriptionText": "用户在登录页面输入正确密码后点击登录，页面崩溃。",
         "desc_rich": "<p>用户在登录页面输入正确密码后点击登录，页面崩溃。</p><p><img src=\"https://ones.test/attachment/img1.png\" /></p>",
-        "issueType": { "key": "it-1", "uuid": "it-uuid-1", "name": "缺陷", "detailType": 3 },
-        "subIssueType": null,
+        "issueType": { "key": "it-task", "uuid": "it-task", "name": "任务", "detailType": 2 },
+        "subIssueType": { "key": "it-bug", "uuid": "it-bug", "name": "缺陷", "detailType": 3 },
         "status": { "uuid": "s-todo", "name": "待处理", "category": "to_do" },
         "priority": { "value": "high" },
         "assign": { "uuid": "current-user-uuid", "name": "当前用户" },

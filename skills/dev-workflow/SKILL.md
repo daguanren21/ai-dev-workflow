@@ -73,6 +73,7 @@ For detailed operating rules, use `references/workflow.md`, `references/task-typ
 **Action:**
 - Identify the requested outcome.
 - Identify context sources: ONES, GitHub, Jira, Figma, local files, or user text.
+- If a ONES work item still has open product decisions, run `/grill-me`; that skill owns the single `get_grilling_brief` call.
 - Choose a stable `{feature-name}` for artifact paths.
 
 **Output:** source inventory and artifact path: `docs/plans/{feature-name}/`.
@@ -84,7 +85,10 @@ For detailed operating rules, use `references/workflow.md`, `references/task-typ
 **Input:** source inventory from intake.
 
 **Action:**
-- Fetch ONES requirements with the bundled Requirements MCP Server when available.
+- Reuse the source context and follow-up results already returned by `/grill-me`; never call `get_grilling_brief` twice.
+- When grilling was not needed, fetch the ONES item with `get_work_item`. If it is a defect, follow its routing instruction to `get_issue_detail`.
+- Call `get_related_issues` and `get_testcases` when required by the work-item kind and available identifiers.
+- If a tool rejects the ID as the wrong kind, switch tools. Do not retry the rejected path.
 - Fetch GitHub or Jira issue context with external MCP servers when available.
 - Fetch Figma design context with Figma MCP when UI work depends on a Figma file.
 - Use user-provided text directly when no MCP source exists.

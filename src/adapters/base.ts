@@ -1,5 +1,6 @@
 import type { SourceConfig } from '../types/config.js'
 import type { AddManhourResult, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCaseResult, UpdateTaskPlanDatesResult } from '../types/requirement.js'
+import type { RemoteImageTrust } from '../utils/safe-image.js'
 
 export interface GetRequirementParams {
   id: string
@@ -54,6 +55,17 @@ export abstract class BaseAdapter {
     this.sourceType = sourceType
     this.config = config
     this.resolvedAuth = resolvedAuth
+  }
+
+  classifyRemoteImageUrl(url: string): RemoteImageTrust {
+    try {
+      return new URL(url).origin === new URL(this.config.apiBase).origin
+        ? 'configured-origin'
+        : 'untrusted'
+    }
+    catch {
+      return 'untrusted'
+    }
   }
 
   /**

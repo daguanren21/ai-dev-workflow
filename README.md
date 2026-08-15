@@ -10,8 +10,9 @@ An agent harness workflow for AI coding tools, enabling controlled requirement i
 
 | Deliverable | Description |
 |-------------|-------------|
-| **Requirements MCP Server** (`src/`) | MCP server for fetching requirements, with built-in ONES adapter. Installable via npm. |
+| **Requirements MCP Server** (`src/`) | MCP server for ONES work items. Routes 需求/任务/缺陷 by `issueType.detailType`. |
 | **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | Self-contained agent harness skill. Install it to run requirement intake, planning, gated execution, verification, review, and handoff. |
+| **Grill-me Skills** (`skills/grill-me/`, `skills/grilling/`) | Interview loop for open product decisions. Uses `get_grilling_brief`; does not live in the MCP server. |
 
 ---
 
@@ -127,6 +128,14 @@ Add to your `.mcp.json`:
 }
 ```
 
+#### MCP security boundaries
+
+- ONES titles, descriptions, test cases, and attachment metadata are marked as untrusted data. Instructions embedded in them must never drive tool calls.
+- Rich HTML is converted to bounded plain text. URL credentials, query strings, fragments, remote error bodies, and internal API base URLs are not returned to the model.
+- Image downloads accept only configured-source URLs or URLs issued by the authenticated ONES attachment API. Redirects are revalidated; private-network targets are rejected unless they are the configured source itself.
+- A tool call downloads at most 8 PNG/JPEG/GIF/WebP images, each at most 8 MiB with a 10-second timeout.
+- Mutation tools remain separate calls and require explicit user confirmation in the workflow.
+
 ### 5. Add Companion MCP Servers (Optional)
 
 Requirements are not limited to ONES. Pair with official MCP servers for GitHub / Jira / Figma:
@@ -194,16 +203,14 @@ skills/dev-workflow/
 
 ```
 ai-dev-workflow/
-├── skills/dev-workflow/             # Agent Harness Workflow Skill (self-contained)
-│   ├── SKILL.md
-│   └── references/
-│       ├── workflow.md              # Agent harness lifecycle
-│       ├── task-types.md
-│       ├── service-transform.md
-│       └── templates/
+├── skills/
+│   ├── grill-me/                    # User-invoked grilling entry
+│   ├── grilling/                    # Interview primitive
+│   └── dev-workflow/                # Agent Harness Workflow Skill
 │
 ├── src/                             # Requirements MCP Server source
-│   ├── index.ts                     # Entry & MCP Server definition
+│   ├── index.ts                     # Stdio bootstrap
+│   ├── server.ts                    # MCP Server factory & tool registration (SDK v2)
 │   ├── adapters/
 │   │   ├── base.ts                  # BaseAdapter abstract class
 │   │   ├── ones.ts                  # ONES adapter
@@ -211,7 +218,8 @@ ai-dev-workflow/
 │   ├── config/
 │   │   └── loader.ts                # Config loading & env resolution
 │   ├── tools/
-│   │   ├── get-requirement.ts       # get_requirement tool
+│   │   ├── get-work-item.ts         # get_work_item tool
+│   │   ├── get-grilling-brief.ts    # get_grilling_brief tool
 │   │   ├── search-requirements.ts   # search_requirements tool
 │   │   └── list-sources.ts          # list_sources tool
 │   ├── types/
@@ -220,13 +228,17 @@ ai-dev-workflow/
 │   │   └── requirement.ts
 │   └── utils/
 │       ├── http.ts
-│       └── map-status.ts
+│       ├── map-status.ts
+│       └── ones-issue-kind.ts
 │
+├── packages/ai-dev-requirements/   # Publishable Changesets workspace package
+│   ├── package.json
+│   ├── tsdown.config.ts
+│   └── skills/
 ├── tests/                           # Tests
 ├── .requirements-mcp.json.example   # MCP Server config template
-├── package.json
+├── package.json                     # Private workspace orchestrator
 ├── tsconfig.json
-├── tsdown.config.ts
 └── vitest.config.ts
 ```
 
@@ -237,11 +249,11 @@ ai-dev-workflow/
 | Technology | Purpose |
 |------------|---------|
 | TypeScript | MCP Server language |
-| [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) | MCP protocol SDK |
+| [@modelcontextprotocol/server](https://github.com/modelcontextprotocol/typescript-sdk) | MCP protocol SDK v2 |
 | [Zod](https://zod.dev/) | Schema validation & type inference |
 | [tsdown](https://github.com/nicepkg/tsdown) | Build tool (ESM + CJS + dts) |
 | [Vitest](https://vitest.dev/) | Test framework |
-| [bumpp](https://github.com/antfu/bumpp) | Version management & publishing |
+| [Changesets v3](https://github.com/changesets/changesets) | Version PRs, changelogs, and npm publishing |
 | Node.js >= 20 | Runtime |
 
 ---
@@ -265,14 +277,6 @@ pnpm test
 pnpm lint
 ```
 
-### Publishing
-
-This project uses [bumpp](https://github.com/antfu/bumpp) for version management:
-
-```bash
-# Interactive version bump, auto commit + tag + push
-pnpm release
-```
 
 ---
 

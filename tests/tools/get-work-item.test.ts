@@ -1,7 +1,7 @@
 import type { BaseAdapter } from '../../src/adapters/base.js'
 import type { Requirement } from '../../src/types/requirement.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleGetRequirement } from '../../src/tools/get-requirement.js'
+import { handleGetWorkItem } from '../../src/tools/get-work-item.js'
 
 const mockRequirement: Requirement = {
   id: 'TEST-001',
@@ -25,11 +25,13 @@ function createMockAdapter(overrides?: Partial<Requirement>): BaseAdapter {
   return {
     sourceType: 'ones',
     getRequirement: vi.fn().mockResolvedValue({ ...mockRequirement, ...overrides }),
+    classifyRemoteImageUrl: vi.fn((url: string) =>
+      new URL(url).origin === 'https://ones.test' ? 'configured-origin' : 'untrusted'),
     searchRequirements: vi.fn(),
   } as unknown as BaseAdapter
 }
 
-describe('handleGetRequirement', () => {
+describe('handleGetWorkItem', () => {
   let adapters: Map<string, BaseAdapter>
 
   beforeEach(() => {
@@ -42,7 +44,7 @@ describe('handleGetRequirement', () => {
   })
 
   it('should return formatted requirement text', async () => {
-    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'ones')
+    const result = await handleGetWorkItem({ id: 'TEST-001' }, adapters, 'ones')
 
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
@@ -55,7 +57,7 @@ describe('handleGetRequirement', () => {
   it('should use explicit source over default', async () => {
     adapters.set('ones', createMockAdapter({ id: 'ONES-001' }))
 
-    const result = await handleGetRequirement(
+    const result = await handleGetWorkItem(
       { id: 'ONES-001', source: 'ones' },
       adapters,
       'ones',
@@ -66,13 +68,13 @@ describe('handleGetRequirement', () => {
 
   it('should throw if no source specified and no default', async () => {
     await expect(
-      handleGetRequirement({ id: 'TEST-001' }, adapters, undefined),
+      handleGetWorkItem({ id: 'TEST-001' }, adapters, undefined),
     ).rejects.toThrow('No source specified')
   })
 
   it('should throw if source not configured', async () => {
     await expect(
-      handleGetRequirement({ id: 'TEST-001', source: 'nonexistent' }, adapters, undefined),
+      handleGetWorkItem({ id: 'TEST-001', source: 'nonexistent' }, adapters, undefined),
     ).rejects.toThrow('not configured')
   })
 
@@ -83,19 +85,27 @@ describe('handleGetRequirement', () => {
       ],
     }))
 
-    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'ones')
+    const result = await handleGetWorkItem({ id: 'TEST-001' }, adapters, 'ones')
 
     expect(result.content[0].text).toContain('doc.pdf')
     expect(result.content[0].text).toContain('Attachments')
   })
 
   it('should return MCP image content for image attachments without exposing wiki tokens in text', async () => {
-    const imageBytes = new Uint8Array([1, 2, 3, 4])
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      headers: new Headers({ 'content-type': 'image/png' }),
-      arrayBuffer: () => Promise.resolve(imageBytes.buffer),
-    })
+    const imageBytes = new Uint8Array([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+    ])
+    const fetchMock = vi.fn().mockResolvedValue(new Response(imageBytes, {
+      status: 200,
+      headers: { 'content-type': 'image/png' },
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     adapters.set('ones', createMockAdapter({
@@ -110,11 +120,11 @@ describe('handleGetRequirement', () => {
       ],
     }))
 
-    const result = await handleGetRequirement({ id: 'TEST-001' }, adapters, 'ones')
+    const result = await handleGetWorkItem({ id: 'TEST-001' }, adapters, 'ones')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://ones.test/wiki/api/wiki/editor/team-1/ref-1/resources/order.png?token=mock-wiki-token',
-      { redirect: 'follow' },
+      new URL('https://ones.test/wiki/api/wiki/editor/team-1/ref-1/resources/order.png?token=mock-wiki-token'),
+      expect.objectContaining({ redirect: 'manual' }),
     )
     expect(result.content).toHaveLength(2)
     expect(result.content[0].type).toBe('text')

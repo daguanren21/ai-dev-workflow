@@ -70,12 +70,8 @@ export async function authFetch<T = unknown>(
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(
-      `HTTP ${response.status} ${response.statusText} from ${method} ${url.pathname}: ${text}`,
-    )
-  }
+  if (!response.ok)
+    throw new Error(`Source request failed with status ${response.status}`)
 
   return response.json() as Promise<T>
 }

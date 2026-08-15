@@ -1,6 +1,7 @@
 import type { BaseAdapter } from '../adapters/base.js'
 import type { TestCaseResult } from '../types/requirement.js'
 import { z } from 'zod/v4'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
 
 export const GetTestcasesSchema = z.object({
   taskNumber: z.string().describe('Task number (e.g. "302" or "#302"). Finds all testcases in the matching module.'),
@@ -42,35 +43,40 @@ export async function handleGetTestcases(
   }
 }
 
+function formatTableCell(value: string): string {
+  return sanitizeExternalText(value)
+    .replace(/\|/g, '\\|')
+    .replace(/\n/g, '<br>')
+}
+
 function formatTestcases(result: TestCaseResult): string {
   const lines = [
-    `# ${result.taskName} — 测试用例`,
+    `# ${sanitizeExternalInline(result.taskName)} — 测试用例`,
     '',
-    `- **模块**: ${result.moduleName}`,
+    `- **模块**: ${sanitizeExternalInline(result.moduleName)}`,
     `- **共 ${result.totalCount} 个用例**（已加载 ${result.cases.length} 个）`,
+    '',
+    UNTRUSTED_SOURCE_NOTICE,
     '',
   ]
 
-  for (const tc of result.cases) {
-    lines.push(`## ${tc.id} ${tc.name}`)
+  for (const testCase of result.cases) {
+    lines.push(`## ${sanitizeExternalInline(testCase.id)} ${sanitizeExternalInline(testCase.name)}`)
     lines.push('')
-    lines.push(`- 优先级: ${tc.priority} | 类型: ${tc.type}`)
-    if (tc.assignName)
-      lines.push(`- 维护人: ${tc.assignName}`)
-    if (tc.condition)
-      lines.push(`- 前置条件: ${tc.condition}`)
-    if (tc.desc)
-      lines.push(`- 备注: ${tc.desc}`)
+    lines.push(`- 优先级: ${sanitizeExternalInline(testCase.priority)} | 类型: ${sanitizeExternalInline(testCase.type)}`)
+    if (testCase.assignName)
+      lines.push(`- 维护人: ${sanitizeExternalInline(testCase.assignName)}`)
+    if (testCase.condition)
+      lines.push(`- 前置条件: ${sanitizeExternalText(testCase.condition)}`)
+    if (testCase.desc)
+      lines.push(`- 备注: ${sanitizeExternalText(testCase.desc)}`)
 
-    if (tc.steps.length > 0) {
+    if (testCase.steps.length > 0) {
       lines.push('')
       lines.push('| 步骤 | 操作描述 | 预期结果 |')
       lines.push('|------|----------|----------|')
-      for (const step of tc.steps) {
-        const desc = step.desc.replace(/\n/g, '<br>')
-        const res = step.result.replace(/\n/g, '<br>')
-        lines.push(`| ${step.index + 1} | ${desc} | ${res} |`)
-      }
+      for (const step of testCase.steps)
+        lines.push(`| ${step.index + 1} | ${formatTableCell(step.desc)} | ${formatTableCell(step.result)} |`)
     }
     lines.push('')
   }

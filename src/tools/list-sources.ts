@@ -14,12 +14,10 @@ export async function handleListSources(
     }
   }
 
-  for (const [type, adapter] of adapters) {
+  for (const type of adapters.keys()) {
     const isDefault = config.defaultSource === type
-    const sourceConfig = config.sources[adapter.sourceType]
     lines.push(`## ${type}${isDefault ? ' (default)' : ''}`)
-    lines.push(`- **API Base**: ${sourceConfig?.apiBase ?? 'N/A'}`)
-    lines.push(`- **Auth Type**: ${sourceConfig?.auth.type ?? 'N/A'}`)
+    lines.push('- **Status**: configured')
     lines.push('')
   }
 

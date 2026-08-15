@@ -31,7 +31,9 @@ describe('handleListSources', () => {
 
     expect(result.content[0].text).toContain('ones')
     expect(result.content[0].text).toContain('(default)')
-    expect(result.content[0].text).toContain('ones-pkce')
+    expect(result.content[0].text).toContain('Status')
+    expect(result.content[0].text).not.toContain('ones-pkce')
+    expect(result.content[0].text).not.toContain('ones.example.com')
   })
 
   it('should handle no sources', async () => {

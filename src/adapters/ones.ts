@@ -1,9 +1,12 @@
 import type { SourceConfig } from '../types/config.js'
 import type { AddManhourResult, Attachment, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep, UpdateTaskPlanDatesResult } from '../types/requirement.js'
 
+import type { OnesWorkItemKind } from '../utils/ones-issue-kind.js'
+import type { RemoteImageTrust } from '../utils/safe-image.js'
 import type { AddManhourParams, GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams, UpdateTaskPlanDatesParams } from './base.js'
 import crypto from 'node:crypto'
 import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
+import { classifyOnesWorkItem, workItemKindLabel } from '../utils/ones-issue-kind.js'
 import { BaseAdapter } from './base.js'
 
 // ============ ONES GraphQL types ============
@@ -19,6 +22,7 @@ interface OnesTaskNode {
   status: { uuid: string, name: string, category?: string }
   priority?: { value: string }
   issueType?: { uuid: string, name: string, detailType?: number }
+  subIssueType?: { uuid: string, name: string, detailType?: number } | null
   assign?: { uuid: string, name: string } | null
   owner?: { uuid: string, name: string } | null
   project?: { uuid: string, name: string }
@@ -60,12 +64,6 @@ interface OnesRelatedActivity {
   project_uuid?: string
   relatedChild?: string
   related_child_uuid?: string
-}
-
-interface OnesIssueTypeNode {
-  uuid: string
-  name: string
-  detailType: number
 }
 
 interface OnesTeamUserNode {
@@ -197,7 +195,8 @@ const TASK_DETAIL_QUERY = `
       description
       descriptionText
       desc_rich: description
-      issueType { uuid name }
+      issueType { uuid name detailType }
+      subIssueType { uuid name detailType }
       status { uuid name category }
       priority { value }
       assign { uuid name }
@@ -250,21 +249,12 @@ const SEARCH_TASKS_QUERY = `
       tasks(filterGroup: $filterGroup, orderBy: $orderBy, limit: $limit, includeAncestors: { pathField: "path" }) {
         key uuid number name
         issueType { uuid name detailType }
+        subIssueType { uuid name detailType }
         status { uuid name category }
         priority { value }
         assign { uuid name }
         project { uuid name }
       }
-    }
-  }
-`
-
-const ISSUE_TYPES_QUERY = `
-  query IssueTypes($orderBy: OrderBy) {
-    issueTypes(orderBy: $orderBy) {
-      uuid
-      name
-      detailType
     }
   }
 `
@@ -297,6 +287,8 @@ const RELATED_TASKS_QUERY = `
   query Task($key: Key) {
     task(key: $key) {
       key
+      issueType { uuid name detailType }
+      subIssueType { uuid name detailType }
       relatedTasks {
         key
         uuid
@@ -576,24 +568,67 @@ function getSetCookies(response: Response): string[] {
   return raw ? [raw] : []
 }
 
-function extractWikiPageUuidsFromText(text: string): string[] {
+function extractWikiPageUuidsFromText(text: string, apiBase: string): string[] {
   if (!text)
     return []
 
   const uuids = new Set<string>()
-  const patterns = [
-    /\/page\/([\w-]+)/g,
-    /page=([\w-]+)/g,
-  ]
+  const configuredOrigin = new URL(apiBase).origin
+  const absoluteRanges: Array<{ start: number, end: number }> = []
 
-  for (const pattern of patterns) {
-    for (const match of text.matchAll(pattern)) {
-      if (match[1])
-        uuids.add(match[1])
+  const collect = (candidate: string) => {
+    try {
+      const absolute = new URL(candidate.replace(/&amp;/g, '&'), apiBase)
+      if (absolute.origin !== configuredOrigin)
+        return
+      const route = parseOnesWikiPageRoute(candidate)
+      if (route)
+        uuids.add(route.wikiUuid)
+    }
+    catch {
+      // Ignore malformed source links. They are untrusted content.
     }
   }
 
+  for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+    const start = match.index
+    absoluteRanges.push({ start, end: start + match[0].length })
+    collect(match[0])
+  }
+
+  for (const match of text.matchAll(/\/wiki(?:\/|(?=[#?]))[^\s<>"']+/gi)) {
+    const start = match.index
+    if (absoluteRanges.some(range => start >= range.start && start < range.end))
+      continue
+    collect(match[0])
+  }
+
   return [...uuids]
+}
+
+function decodeOnesPathIdentifier(segment: string): string | null {
+  try {
+    const decoded = decodeURIComponent(segment)
+    return /^[\w-]{1,128}$/.test(decoded) ? decoded : null
+  }
+  catch {
+    return null
+  }
+}
+
+function encodeOnesPathIdentifier(value: string, label: string): string {
+  if (!/^[\w-]{1,128}$/.test(value))
+    throw new Error(`ONES: Invalid ${label}`)
+  return encodeURIComponent(value)
+}
+
+function isConfiguredOriginUrl(input: string, apiBase: string): boolean {
+  try {
+    return new URL(input).origin === new URL(apiBase).origin
+  }
+  catch {
+    return true
+  }
 }
 
 function parseOnesWikiPageRoute(input: string): OnesWikiPageRoute | null {
@@ -614,10 +649,9 @@ function parseOnesWikiPageRoute(input: string): OnesWikiPageRoute | null {
   if (!match?.[1] || !match[2])
     return null
 
-  return {
-    teamUuid: decodeURIComponent(match[1]),
-    wikiUuid: decodeURIComponent(match[2]),
-  }
+  const teamUuid = decodeOnesPathIdentifier(match[1])
+  const wikiUuid = decodeOnesPathIdentifier(match[2])
+  return teamUuid && wikiUuid ? { teamUuid, wikiUuid } : null
 }
 
 function isOnesWikiUrlInput(input: string): boolean {
@@ -1106,6 +1140,29 @@ function attachmentNameFromPath(path: string): string {
   }
 }
 
+function mapOnesTypeFromTask(task: OnesTaskNode): Requirement['type'] {
+  const kind = classifyOnesWorkItem(task.issueType, task.subIssueType)
+  if (kind === 'requirement')
+    return 'feature'
+  if (kind === 'defect')
+    return 'bug'
+  if (kind === 'task')
+    return 'task'
+  return mapOnesType(task.subIssueType?.name ?? task.issueType?.name ?? '')
+}
+
+function unsupportedWorkItemToolError(
+  id: string,
+  kind: OnesWorkItemKind,
+  tool: string,
+  nextTool: string,
+): Error {
+  const label = workItemKindLabel(kind)
+  return new Error(
+    `ONES: "${id}" is a ${label} (${kind}). ${tool} does not apply. Use ${nextTool} instead.`,
+  )
+}
+
 function toRequirement(task: OnesTaskNode, description = '', attachments: Attachment[] = []): Requirement {
   return {
     id: task.uuid,
@@ -1114,7 +1171,7 @@ function toRequirement(task: OnesTaskNode, description = '', attachments: Attach
     description,
     status: mapOnesStatus(task.status?.category ?? 'to_do'),
     priority: mapOnesPriority(task.priority?.value ?? 'normal'),
-    type: mapOnesType(task.issueType?.name ?? '任务'),
+    type: mapOnesTypeFromTask(task),
     labels: [],
     reporter: '',
     assignee: task.assign?.name ?? null,
@@ -1131,7 +1188,7 @@ function toRequirement(task: OnesTaskNode, description = '', attachments: Attach
 
 export class OnesAdapter extends BaseAdapter {
   private session: OnesSession | null = null
-  private issueTypesCache: OnesIssueTypeNode[] | null = null
+  private readonly sourceIssuedImageUrls = new Set<string>()
 
   constructor(
     sourceType: SourceType,
@@ -1139,6 +1196,43 @@ export class OnesAdapter extends BaseAdapter {
     resolvedAuth: Record<string, string>,
   ) {
     super(sourceType, config, resolvedAuth)
+  }
+
+  override classifyRemoteImageUrl(url: string): RemoteImageTrust {
+    const configuredTrust = super.classifyRemoteImageUrl(url)
+    if (configuredTrust === 'configured-origin')
+      return configuredTrust
+
+    try {
+      return this.sourceIssuedImageUrls.has(new URL(url).toString())
+        ? 'source-issued'
+        : 'untrusted'
+    }
+    catch {
+      return 'untrusted'
+    }
+  }
+
+  private rememberSourceIssuedImageUrl(candidate: string): string | null {
+    try {
+      const normalized = new URL(candidate, this.config.apiBase).toString()
+      const configuredTrust = super.classifyRemoteImageUrl(normalized)
+      if (configuredTrust !== 'configured-origin' && new URL(normalized).protocol !== 'https:')
+        return null
+
+      if (configuredTrust !== 'configured-origin') {
+        if (this.sourceIssuedImageUrls.size >= 256) {
+          const oldest = this.sourceIssuedImageUrls.values().next().value
+          if (typeof oldest === 'string')
+            this.sourceIssuedImageUrls.delete(oldest)
+        }
+        this.sourceIssuedImageUrls.add(normalized)
+      }
+      return normalized
+    }
+    catch {
+      return null
+    }
   }
 
   /**
@@ -1182,10 +1276,8 @@ export class OnesAdapter extends BaseAdapter {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: encryptedPassword }),
     })
-    if (!loginRes.ok) {
-      const text = await loginRes.text().catch(() => '')
-      throw new Error(`ONES: Login failed: ${loginRes.status} ${text}`)
-    }
+    if (!loginRes.ok)
+      throw new Error(`ONES: Login failed with status ${loginRes.status}`)
 
     const cookies = getSetCookies(loginRes)
       .map(cookie => cookie.split(';')[0])
@@ -1253,10 +1345,8 @@ export class OnesAdapter extends BaseAdapter {
           org_user_uuid: orgUser.org_user.org_user_uuid,
         }),
       })
-      if (!finalizeRes.ok) {
-        const text = await finalizeRes.text().catch(() => '')
-        throw new Error(`ONES: Finalize failed: ${finalizeRes.status} ${text}`)
-      }
+      if (!finalizeRes.ok)
+        throw new Error(`ONES: Finalize failed with status ${finalizeRes.status}`)
 
       // 7. Callback to get authorization code
       const callbackRes = await fetch(
@@ -1293,10 +1383,8 @@ export class OnesAdapter extends BaseAdapter {
         redirect_uri: `${baseUrl}/auth/authorize/callback`,
       }).toString(),
     })
-    if (!tokenRes.ok) {
-      const text = await tokenRes.text().catch(() => '')
-      throw new Error(`ONES: Token exchange failed: ${tokenRes.status} ${text}`)
-    }
+    if (!tokenRes.ok)
+      throw new Error(`ONES: Token exchange failed with status ${tokenRes.status}`)
 
     const token = (await tokenRes.json()) as OnesTokenResponse
 
@@ -1361,10 +1449,8 @@ export class OnesAdapter extends BaseAdapter {
       body: JSON.stringify({ query, variables }),
     })
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      throw new Error(`ONES GraphQL error: ${response.status} ${text}`)
-    }
+    if (!response.ok)
+      throw new Error(`ONES GraphQL error: ${response.status}`)
 
     return response.json() as Promise<T>
   }
@@ -1385,10 +1471,8 @@ export class OnesAdapter extends BaseAdapter {
       }),
     })
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      throw new Error(`ONES OneSQL error: ${response.status} ${text}`)
-    }
+    if (!response.ok)
+      throw new Error(`ONES OneSQL error: ${response.status}`)
 
     return response.json() as Promise<T>
   }
@@ -1444,20 +1528,6 @@ export class OnesAdapter extends BaseAdapter {
           }
         : undefined,
     }
-  }
-
-  private async fetchIssueTypes(): Promise<OnesIssueTypeNode[]> {
-    if (this.issueTypesCache)
-      return this.issueTypesCache
-
-    const data = await this.graphql<{ data?: { issueTypes?: OnesIssueTypeNode[] } }>(
-      ISSUE_TYPES_QUERY,
-      { orderBy: { namePinyin: 'ASC' } },
-      'issueTypes',
-    )
-
-    this.issueTypesCache = data.data?.issueTypes ?? []
-    return this.issueTypesCache
   }
 
   private async fetchProjects(): Promise<OnesProjectNode[]> {
@@ -1571,10 +1641,8 @@ export class OnesAdapter extends BaseAdapter {
       }),
     })
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      throw new Error(`ONES user search error: ${response.status} ${text}`)
-    }
+    if (!response.ok)
+      throw new Error(`ONES user search error: ${response.status}`)
 
     return extractTeamUsers(await response.json())
   }
@@ -1600,7 +1668,9 @@ export class OnesAdapter extends BaseAdapter {
    */
   private async fetchTaskInfo(taskUuid: string): Promise<Record<string, unknown>> {
     const session = await this.login()
-    const url = `${this.config.apiBase}/project/api/project/team/${session.teamUuid}/task/${taskUuid}/info`
+    const teamUuid = encodeOnesPathIdentifier(session.teamUuid, 'team UUID')
+    const encodedTaskUuid = encodeOnesPathIdentifier(taskUuid, 'task UUID')
+    const url = `${this.config.apiBase}/project/api/project/team/${teamUuid}/task/${encodedTaskUuid}/info`
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -1619,8 +1689,17 @@ export class OnesAdapter extends BaseAdapter {
    * Returns a redirect URL with a fresh OSS signature.
    */
   private async getAttachmentUrl(resourceUuid: string): Promise<string | null> {
+    let encodedResourceUuid: string
+    try {
+      encodedResourceUuid = encodeOnesPathIdentifier(resourceUuid, 'attachment resource UUID')
+    }
+    catch {
+      return null
+    }
+
     const session = await this.login()
-    const url = `${this.config.apiBase}/project/api/project/team/${session.teamUuid}/res/attachment/${resourceUuid}?op=${encodeURIComponent('imageMogr2/auto-orient')}`
+    const teamUuid = encodeOnesPathIdentifier(session.teamUuid, 'team UUID')
+    const url = `${this.config.apiBase}/project/api/project/team/${teamUuid}/res/attachment/${encodedResourceUuid}?op=${encodeURIComponent('imageMogr2/auto-orient')}`
 
     try {
       // First try with redirect: 'manual' to capture 302 Location header
@@ -1632,7 +1711,7 @@ export class OnesAdapter extends BaseAdapter {
       if (manualRes.status === 302 || manualRes.status === 301) {
         const location = manualRes.headers.get('location')
         if (location)
-          return location
+          return this.rememberSourceIssuedImageUrl(location)
       }
 
       // Fallback: follow redirects and use the final URL
@@ -1642,18 +1721,16 @@ export class OnesAdapter extends BaseAdapter {
       })
 
       // If redirected, response.url will be the final signed URL
-      if (followRes.url && followRes.url !== url) {
-        return followRes.url
-      }
+      if (followRes.url && followRes.url !== url)
+        return this.rememberSourceIssuedImageUrl(followRes.url)
 
       if (followRes.ok) {
         const text = await followRes.text()
-        if (text.startsWith('http')) {
-          return text.trim()
-        }
+        if (text.startsWith('http'))
+          return this.rememberSourceIssuedImageUrl(text.trim())
         try {
           const data = JSON.parse(text) as { url?: string }
-          return data.url ?? null
+          return data.url ? this.rememberSourceIssuedImageUrl(data.url) : null
         }
         catch {
           return null
@@ -1711,8 +1788,9 @@ export class OnesAdapter extends BaseAdapter {
    */
   private async fetchWikiPageDetail(wikiUuid: string, teamUuid?: string): Promise<OnesWikiPageDetailResponse> {
     const session = await this.login()
-    const wikiTeamUuid = teamUuid ?? session.teamUuid
-    const url = `${this.config.apiBase}/wiki/api/wiki/team/${wikiTeamUuid}/page/${wikiUuid}/detail`
+    const encodedTeamUuid = encodeOnesPathIdentifier(teamUuid ?? session.teamUuid, 'team UUID')
+    const encodedWikiUuid = encodeOnesPathIdentifier(wikiUuid, 'wiki UUID')
+    const url = `${this.config.apiBase}/wiki/api/wiki/team/${encodedTeamUuid}/page/${encodedWikiUuid}/detail`
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -1726,18 +1804,23 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   private buildWikiImageUrl(session: OnesSession, refUuid: string, source: string, token: string, teamUuid?: string): string {
-    const encodedRefUuid = encodeURIComponent(refUuid)
-    const encodedSource = source.split('/').map(part => encodeURIComponent(part)).join('/')
+    const encodedRefUuid = encodeOnesPathIdentifier(refUuid, 'wiki reference UUID')
+    const sourceParts = source.split('/')
+    if (sourceParts.some(part => !part || part === '.' || part === '..' || part.includes('\\')))
+      throw new Error('ONES: Invalid wiki attachment path')
+    const encodedSource = sourceParts.map(part => encodeURIComponent(part)).join('/')
     const encodedToken = encodeURIComponent(token)
-    const wikiTeamUuid = teamUuid ?? session.teamUuid
+    const encodedTeamUuid = encodeOnesPathIdentifier(teamUuid ?? session.teamUuid, 'team UUID')
 
-    return `${this.config.apiBase}/wiki/api/wiki/editor/${wikiTeamUuid}/${encodedRefUuid}/resources/${encodedSource}?token=${encodedToken}`
+    return `${this.config.apiBase}/wiki/api/wiki/editor/${encodedTeamUuid}/${encodedRefUuid}/resources/${encodedSource}?token=${encodedToken}`
   }
 
   private async fetchWikiContent(wikiUuid: string, teamUuid?: string): Promise<RenderedWikiContent> {
     const session = await this.login()
     const wikiTeamUuid = teamUuid ?? session.teamUuid
-    const url = `${this.config.apiBase}/wiki/api/wiki/team/${wikiTeamUuid}/online_page/${wikiUuid}/content`
+    const encodedTeamUuid = encodeOnesPathIdentifier(wikiTeamUuid, 'team UUID')
+    const encodedWikiUuid = encodeOnesPathIdentifier(wikiUuid, 'wiki UUID')
+    const url = `${this.config.apiBase}/wiki/api/wiki/team/${encodedTeamUuid}/online_page/${encodedWikiUuid}/content`
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${session.accessToken}` },
@@ -1774,11 +1857,14 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   /**
-   * Fetch a single task by UUID or number (e.g. "#1001" or "1001").
-   * If a number is given, searches first to resolve the UUID.
+   * Fetch a work item by UUID, number, display id, or wiki URL.
+   * Routes by issueType.detailType: requirement (1) loads wiki docs;
+   * task (2) and defect (3) return the item itself without wiki expansion.
    */
   async getRequirement(params: GetRequirementParams): Promise<Requirement> {
     const wikiRoute = parseOnesWikiPageRoute(params.id)
+    if (wikiRoute && !isConfiguredOriginUrl(params.id, this.config.apiBase))
+      throw new Error('ONES: Wiki URL origin does not match the configured source')
     if (wikiRoute) {
       const rendered = await this.fetchWikiContent(wikiRoute.wikiUuid, wikiRoute.teamUuid)
 
@@ -1801,6 +1887,10 @@ export class OnesAdapter extends BaseAdapter {
           input: params.id,
           teamUuid: wikiRoute.teamUuid,
           wikiUuid: wikiRoute.wikiUuid,
+          workItemKind: 'requirement',
+          sourceDescription: rendered.content,
+          hasSourceDescription: Boolean(rendered.content.trim()),
+          hasRequirementDocuments: Boolean(rendered.content.trim()),
         },
       }
     }
@@ -1809,9 +1899,7 @@ export class OnesAdapter extends BaseAdapter {
     }
 
     const taskRef = await this.resolveTaskRef(params.id)
-    const shouldFetchRelatedActivities = parseDisplayId(params.id.trim()) !== null
 
-    // Fetch GraphQL data (structure, relations, wiki pages)
     const graphqlData = await this.graphql<{ data?: { task?: OnesTaskNode } }>(
       TASK_DETAIL_QUERY,
       { key: taskRef.key },
@@ -1823,12 +1911,32 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Task "${params.id}" not found`)
     }
 
+    const kind = classifyOnesWorkItem(task.issueType, task.subIssueType)
+    if (kind === 'unknown') {
+      throw new Error(
+        `ONES: Unable to classify "${params.id}". `
+        + `issueType=${task.issueType?.name ?? 'missing'}, `
+        + `detailType=${task.issueType?.detailType ?? 'missing'}, `
+        + `subIssueType=${task.subIssueType?.name ?? 'missing'}, `
+        + `subDetailType=${task.subIssueType?.detailType ?? 'missing'}`,
+      )
+    }
+    if (kind === 'requirement')
+      return this.buildRequirementDocument(params.id, taskRef.key, task)
+
+    return this.buildWorkItemSummary(task, kind)
+  }
+
+  private async buildRequirementDocument(
+    inputId: string,
+    taskKey: string,
+    task: OnesTaskNode,
+  ): Promise<Requirement> {
+    const shouldFetchRelatedActivities = parseDisplayId(inputId.trim()) !== null
     const relatedActivities = shouldFetchRelatedActivities
-      ? await this.fetchRelatedActivities(taskRef.key)
+      ? await this.fetchRelatedActivities(taskKey)
       : []
 
-    // Fetch wiki page content for related requirement docs (in parallel).
-    // Wiki links may come from ONES relations or be pasted directly into the task description.
     const wikiRefs = new Map<string, { title: string, uuid: string }>()
     for (const wiki of task.relatedWikiPages ?? []) {
       if (!wiki.errorMessage)
@@ -1839,7 +1947,7 @@ export class OnesAdapter extends BaseAdapter {
       .filter(Boolean)
       .join('\n')
 
-    for (const wikiUuid of extractWikiPageUuidsFromText(detailForLinkExtraction)) {
+    for (const wikiUuid of extractWikiPageUuidsFromText(detailForLinkExtraction, this.config.apiBase)) {
       if (!wikiRefs.has(wikiUuid))
         wikiRefs.set(wikiUuid, { title: `Wiki ${wikiUuid}`, uuid: wikiUuid })
     }
@@ -1851,24 +1959,19 @@ export class OnesAdapter extends BaseAdapter {
       }),
     )
 
-    // Build description: task info + wiki requirement docs
     const parts: string[] = []
-
-    // Task basic info
     parts.push(`# #${task.number} ${task.name}`)
     parts.push('')
     parts.push(`- **Type**: ${task.issueType?.name ?? 'Unknown'}`)
+    parts.push(`- **Work Item Kind**: requirement`)
     parts.push(`- **Status**: ${task.status?.name ?? 'Unknown'}`)
     parts.push(`- **Assignee**: ${task.assign?.name ?? 'Unassigned'}`)
-    if (task.owner?.name) {
+    if (task.owner?.name)
       parts.push(`- **Owner**: ${task.owner.name}`)
-    }
-    if (task.project?.name) {
+    if (task.project?.name)
       parts.push(`- **Project**: ${task.project.name}`)
-    }
     parts.push(`- **UUID**: ${task.uuid}`)
 
-    // Related tasks
     if (task.relatedTasks?.length) {
       parts.push('')
       parts.push('## Related Tasks')
@@ -1891,17 +1994,14 @@ export class OnesAdapter extends BaseAdapter {
       }
     }
 
-    // Parent task
     if (task.parent?.uuid) {
       parts.push('')
       parts.push('## Parent Task')
       parts.push(`- UUID: ${task.parent.uuid}`)
-      if (task.parent.number) {
+      if (task.parent.number)
         parts.push(`- Number: #${task.parent.number}`)
-      }
     }
 
-    // Wiki requirement documents (the core requirement content)
     if (wikiContents.length > 0) {
       parts.push('')
       parts.push('---')
@@ -1911,12 +2011,7 @@ export class OnesAdapter extends BaseAdapter {
         parts.push('')
         parts.push(`### ${wiki.title}`)
         parts.push('')
-        if (wiki.content) {
-          parts.push(wiki.content)
-        }
-        else {
-          parts.push('(No content available)')
-        }
+        parts.push(wiki.content || '(No content available)')
       }
     }
 
@@ -1936,8 +2031,77 @@ export class OnesAdapter extends BaseAdapter {
     req.raw = {
       ...req.raw,
       relatedActivities,
+      workItemKind: 'requirement',
+      sourceDescription: hasWikiContent
+        ? wikiContents.map(wiki => wiki.content).filter(Boolean).join('\n\n')
+        : detailText,
+      hasSourceDescription: hasWikiContent || Boolean(detailText),
+      hasRequirementDocuments: hasWikiContent,
+      relatedTaskCount: task.relatedTasks?.length ?? 0,
+    }
+    return req
+  }
+
+  private buildWorkItemSummary(task: OnesTaskNode, kind: OnesWorkItemKind): Requirement {
+    const nextTool = kind === 'defect'
+      ? 'get_issue_detail'
+      : 'get_related_issues / get_testcases'
+    const parts = [
+      `# #${task.number} ${task.name}`,
+      '',
+      `- **Type**: ${task.subIssueType?.name ?? task.issueType?.name ?? 'Unknown'}`,
+      `- **Work Item Kind**: ${kind}`,
+      `- **Status**: ${task.status?.name ?? 'Unknown'}`,
+      `- **Assignee**: ${task.assign?.name ?? 'Unassigned'}`,
+    ]
+    if (task.owner?.name)
+      parts.push(`- **Owner**: ${task.owner.name}`)
+    if (task.project?.name)
+      parts.push(`- **Project**: ${task.project.name}`)
+    parts.push(`- **UUID**: ${task.uuid}`)
+
+    if (task.parent?.uuid) {
+      parts.push('')
+      parts.push('## Parent Task')
+      parts.push(`- UUID: ${task.parent.uuid}`)
+      if (task.parent.number)
+        parts.push(`- Number: #${task.parent.number}`)
     }
 
+    const detailText = getTaskDetailText(task)
+    if (detailText) {
+      parts.push('')
+      parts.push('---')
+      parts.push('')
+      parts.push(kind === 'defect' ? '## Defect Detail' : '## Task Detail')
+      parts.push('')
+      parts.push(detailText)
+    }
+
+    parts.push('')
+    parts.push('## Next Tool')
+    parts.push('')
+    parts.push(`This ID is a ${workItemKindLabel(kind)}, not a requirement document.`)
+    parts.push(`Do not treat wiki/requirement docs as the source of truth. Use \`${nextTool}\` for the next lookup.`)
+
+    if (task.relatedTasks?.length) {
+      parts.push('')
+      parts.push('## Related Tasks')
+      for (const related of task.relatedTasks) {
+        const assignee = related.assign?.name ?? 'Unassigned'
+        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${assignee}`)
+      }
+    }
+
+    const req = toRequirement(task, parts.join('\n'))
+    req.raw = {
+      ...req.raw,
+      workItemKind: kind,
+      sourceDescription: detailText,
+      hasSourceDescription: Boolean(detailText),
+      hasRequirementDocuments: false,
+      relatedTaskCount: task.relatedTasks?.length ?? 0,
+    }
     return req
   }
 
@@ -1963,15 +2127,6 @@ export class OnesAdapter extends BaseAdapter {
       }
     }
 
-    let bugTypeUuids: string[] = []
-    let taskTypeUuids: string[] = []
-
-    if (intent === 'all_bugs' || intent === 'all_tasks') {
-      const issueTypes = await this.fetchIssueTypes()
-      bugTypeUuids = issueTypes.filter(item => item.detailType === 3).map(item => item.uuid)
-      taskTypeUuids = issueTypes.filter(item => item.detailType === 2).map(item => item.uuid)
-    }
-
     const filter: Record<string, unknown> = {
       status_notIn: DEFAULT_STATUS_NOT_IN,
     }
@@ -1982,12 +2137,6 @@ export class OnesAdapter extends BaseAdapter {
     else {
       filter.assign_in = ['${currentUser}']
     }
-
-    if (intent === 'all_bugs')
-      filter.issueType_in = bugTypeUuids
-
-    if (intent === 'all_tasks')
-      filter.issueType_in = taskTypeUuids
 
     const data = await this.graphql<{
       data?: {
@@ -2014,16 +2163,16 @@ export class OnesAdapter extends BaseAdapter {
 
     if (intent === 'all_bugs') {
       tasks = tasks
-        .filter(task => task.issueType?.uuid ? bugTypeUuids.includes(task.issueType.uuid) : false)
+        .filter(task => classifyOnesWorkItem(task.issueType, task.subIssueType) === 'defect')
         .filter(task => isOpenOrInProgressBug(task))
         .sort((a, b) => getBugStatusPriority(a) - getBugStatusPriority(b))
     }
 
     if (intent === 'all_tasks') {
-      // detailType = 1 的需求不属于“我的任务”列表入口。
-      // 需求详情查询继续走 getRequirement(id/number)，因为需求通常由产品负责人维护，
-      // 当前登录用户不一定能通过 assign_in: ['${currentUser}'] 查到需求项。
-      tasks = tasks.filter(task => task.issueType?.uuid ? taskTypeUuids.includes(task.issueType.uuid) : false)
+      // Requirements are intentionally excluded from the “my tasks” entry.
+      tasks = tasks.filter(
+        task => classifyOnesWorkItem(task.issueType, task.subIssueType) === 'task',
+      )
     }
 
     if (assigneeUuid) {
@@ -2131,10 +2280,8 @@ export class OnesAdapter extends BaseAdapter {
       }),
     })
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '')
-      throw new Error(`ONES: Failed to update task plan dates: ${response.status} ${text}`)
-    }
+    if (!response.ok)
+      throw new Error(`ONES: Failed to update task plan dates: ${response.status}`)
 
     return {
       taskUuid: taskRef.uuid,
@@ -2154,6 +2301,8 @@ export class OnesAdapter extends BaseAdapter {
       data?: {
         task?: {
           key: string
+          issueType?: { uuid: string, name: string, detailType?: number }
+          subIssueType?: { uuid: string, name: string, detailType?: number } | null
           relatedTasks: Array<{
             key: string
             uuid: string
@@ -2169,7 +2318,20 @@ export class OnesAdapter extends BaseAdapter {
       }
     }>(RELATED_TASKS_QUERY, { key: taskKey }, 'Task')
 
-    const relatedTasks = data.data?.task?.relatedTasks ?? []
+    const parent = data.data?.task
+    if (!parent) {
+      throw new Error(`ONES: Task "${params.taskId}" not found`)
+    }
+
+    const parentKind = classifyOnesWorkItem(parent.issueType, parent.subIssueType)
+    if (parentKind === 'unknown') {
+      throw new Error(`ONES: Unable to classify "${params.taskId}" before get_related_issues`)
+    }
+    if (parentKind === 'defect') {
+      throw unsupportedWorkItemToolError(params.taskId, parentKind, 'get_related_issues', 'get_issue_detail')
+    }
+
+    const relatedTasks = parent.relatedTasks ?? []
 
     // Filter: detailType === 3 (defect) + status.category === "to_do" (pending)
     // Returns ALL pending defects, not just current user's
@@ -2192,7 +2354,7 @@ export class OnesAdapter extends BaseAdapter {
       key: t.key,
       uuid: t.uuid,
       name: t.name,
-      issueTypeName: t.issueType?.name ?? 'Unknown',
+      issueTypeName: t.subIssueType?.name ?? t.issueType?.name ?? 'Unknown',
       statusName: t.status?.name ?? 'Unknown',
       statusCategory: t.status?.category ?? 'unknown',
       assignName: t.assign?.name ?? null,
@@ -2247,7 +2409,8 @@ export class OnesAdapter extends BaseAdapter {
           description: string
           descriptionText: string
           desc_rich: string
-          issueType: { name: string }
+          issueType: { name: string, detailType?: number }
+          subIssueType?: { name: string, detailType?: number } | null
           status: { name: string, category: string }
           priority?: { value: string } | null
           assign?: { uuid: string, name: string } | null
@@ -2266,6 +2429,14 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Issue "${issueKey}" not found`)
     }
 
+    const kind = classifyOnesWorkItem(task.issueType, task.subIssueType)
+    if (kind === 'unknown') {
+      throw new Error(`ONES: Unable to classify "${params.issueId}" before get_issue_detail`)
+    }
+    if (kind === 'requirement' || kind === 'task') {
+      throw unsupportedWorkItemToolError(params.issueId, kind, 'get_issue_detail', 'get_work_item')
+    }
+
     // Fetch fresh description via REST API
     const taskInfo = await this.fetchTaskInfo(task.uuid)
     const rawDescription = (taskInfo.desc as string) ?? task.description ?? ''
@@ -2282,7 +2453,7 @@ export class OnesAdapter extends BaseAdapter {
       description: freshDescription,
       descriptionRich: freshDescRich,
       descriptionText: task.descriptionText ?? '',
-      issueTypeName: task.issueType?.name ?? 'Unknown',
+      issueTypeName: task.subIssueType?.name ?? task.issueType?.name ?? 'Unknown',
       statusName: task.status?.name ?? 'Unknown',
       statusCategory: task.status?.category ?? 'unknown',
       assignName: task.assign?.name ?? null,
@@ -2298,27 +2469,15 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   async getTestcases(params: GetTestcasesParams): Promise<TestCaseResult> {
-    let libraryUuid = params.libraryUuid
-      ?? (this.config.options?.testcaseLibraryUuid as string)
-
-    // Auto-fetch library UUID if not configured
-    if (!libraryUuid) {
-      const libData = await this.graphql<{
-        data?: { testcaseLibraries?: Array<{ uuid: string, name: string, testcaseCaseCount: number }> }
-      }>(TESTCASE_LIBRARY_LIST_QUERY, {}, 'library-select')
-
-      const libs = libData.data?.testcaseLibraries ?? []
-      if (libs.length === 0) {
-        throw new Error('ONES: No testcase libraries found for this team')
-      }
-      // Pick the library with the most cases (most likely the main one)
-      libs.sort((a, b) => b.testcaseCaseCount - a.testcaseCaseCount)
-      libraryUuid = libs[0].uuid
-    }
-
     // Step 1: Search task by number to get task name
     const searchData = await this.graphql<{
-      data?: { buckets?: Array<{ tasks?: Array<{ uuid: string, number: number, name: string }> }> }
+      data?: { buckets?: Array<{ tasks?: Array<{
+        uuid: string
+        number: number
+        name: string
+        issueType?: { uuid: string, name: string, detailType?: number }
+        subIssueType?: { uuid: string, name: string, detailType?: number } | null
+      }> }> }
     }>(
       SEARCH_TASKS_QUERY,
       {
@@ -2339,7 +2498,38 @@ export class OnesAdapter extends BaseAdapter {
       throw new Error(`ONES: Task #${params.taskNumber} not found`)
     }
 
-    // Step 2: Search testcase module by task number pattern (e.g. "#302")
+    const kind = classifyOnesWorkItem(task.issueType, task.subIssueType)
+    if (kind === 'unknown') {
+      throw new Error(`ONES: Unable to classify "${params.taskNumber}" before get_testcases`)
+    }
+    if (kind === 'defect') {
+      throw unsupportedWorkItemToolError(
+        String(params.taskNumber),
+        kind,
+        'get_testcases',
+        'get_issue_detail',
+      )
+    }
+    // Step 2: Resolve the testcase library only after the work-item kind is valid
+    let libraryUuid = params.libraryUuid
+      ?? (this.config.options?.testcaseLibraryUuid as string)
+
+    // Auto-fetch library UUID if not configured
+    if (!libraryUuid) {
+      const libData = await this.graphql<{
+        data?: { testcaseLibraries?: Array<{ uuid: string, name: string, testcaseCaseCount: number }> }
+      }>(TESTCASE_LIBRARY_LIST_QUERY, {}, 'library-select')
+
+      const libs = libData.data?.testcaseLibraries ?? []
+      if (libs.length === 0) {
+        throw new Error('ONES: No testcase libraries found for this team')
+      }
+      // Pick the library with the most cases (most likely the main one)
+      libs.sort((a, b) => b.testcaseCaseCount - a.testcaseCaseCount)
+      libraryUuid = libs[0].uuid
+    }
+
+    // Step 3: Search testcase module by task number pattern (e.g. "#302")
     const moduleData = await this.graphql<{
       data?: { testcaseModules?: Array<{ uuid: string, name: string }> }
     }>(
@@ -2354,7 +2544,7 @@ export class OnesAdapter extends BaseAdapter {
     }
     const mod = modules[0]
 
-    // Step 3: List ALL testcases under this module (paginated)
+    // Step 4: List ALL testcases under this module (paginated)
     const caseList: Array<{ uuid: string, id: string, name: string }> = []
     let cursor = ''
     let totalCount = 0
@@ -2392,7 +2582,7 @@ export class OnesAdapter extends BaseAdapter {
       return { taskNumber: params.taskNumber, taskName: task.name, moduleName: mod.name, moduleUuid: mod.uuid, totalCount: 0, cases: [] }
     }
 
-    // Step 4: Fetch details + steps in batches of 20
+    // Step 5: Fetch details + steps in batches of 20
     const allCases: TestCase[] = []
     const BATCH_SIZE = 20
     for (let i = 0; i < caseList.length; i += BATCH_SIZE) {

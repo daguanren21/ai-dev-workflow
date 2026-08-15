@@ -120,10 +120,14 @@ The agent identifies the requested outcome, source type, expected deliverable, a
 The harness may load context through:
 
 - Bundled Requirements MCP Server for ONES.
+- `/grill-me` when a ONES work item has open product decisions. The skill calls `get_grilling_brief` once and returns embedded source context plus fact/decision gaps.
+- `get_work_item` for ordinary ONES context loading when grilling is unnecessary.
 - External GitHub or Jira MCP servers for issue context.
 - Figma MCP server for design context.
 - Local repository files.
 - User-provided text.
+
+Never call `get_grilling_brief` again after `/grill-me`. Reuse its context and execute only valid calls from `followUps` to resolve fact gaps. When no grilling session ran, follow `get_work_item` routing: defects use `get_issue_detail`; requirements and tasks may use `get_related_issues` and `get_testcases`.
 
 The output is raw context in `requirements.md`. The agent must keep raw context distinct from interpretation so later coverage validation can trace back to the original input.
 
@@ -286,9 +290,12 @@ Use `handoff.md` when the project needs a persistent artifact. Otherwise include
 
 ## MCP Boundary
 
-MCP is a context input layer. It may fetch requirements, issue details, related work, test cases, and design context. The harness uses that context to create artifacts and make decisions.
+MCP is a context input layer. It may fetch work items, issue details, related work, test cases, grilling briefs, and design context. The harness uses that context to create artifacts and make decisions.
 
-MCP is not the implementation target unless the requested feature explicitly asks for MCP server changes. When MCP server changes are out of scope, do not edit adapters, auth, config loading, tool definitions, package exports, or runtime behavior.
+Route ONES IDs through `get_work_item`, which classifies both `issueType` and `subIssueType`. It fails closed when the type is unknown. Defects use `get_issue_detail`; requirements and tasks may use `get_related_issues` and `get_testcases`.
+
+MCP is not the interview loop. `/grill-me` lives in skills and owns one `get_grilling_brief` call. The brief embeds source context and exposes an output schema; callers must reuse it rather than loading the same item again.
+
 
 ## Recovery Rules
 

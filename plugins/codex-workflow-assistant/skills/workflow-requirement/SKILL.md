@@ -14,9 +14,9 @@ Use this skill when the user enters a requirement number and wants Codex to star
 
 ## Workflow
 
-1. Fetch the requirement with `get_requirement`.
-2. Fetch related issues with `get_related_issues` when the requirement has pending defects or the user asks for defects.
-3. Fetch test cases with `get_testcases` when a task number is available.
+1. Fetch and classify the ONES item with `get_work_item`.
+2. If it is a defect, fetch full detail with `get_issue_detail`; otherwise fetch related defects with `get_related_issues` when needed.
+3. Fetch test cases with `get_testcases` for requirement/task numbers when available.
 4. Ensure the helper CLI exists. If `plugins/codex-workflow-assistant/scripts/dist/workflow-cli.mjs` is missing, run `pnpm build:workflow-plugin`.
 5. Summarize the requirement without copying private content into committed files.
 6. If the base branch is missing, ask the user to choose `master`, `main`, or `dev`.

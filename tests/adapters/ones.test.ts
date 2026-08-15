@@ -455,7 +455,7 @@ describe('onesAdapter', () => {
     it('should fetch wiki content from an anchor link in task description', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
-        description: '<p>具体需求内容详见wiki：<a href="https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-anchor-uuid" target="_blank">点击查看</a></p>',
+        description: '<p>具体需求内容详见wiki：<a href="https://ones.test/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-anchor-uuid" target="_blank">点击查看</a></p>',
         descriptionText: '具体需求内容详见wiki：点击查看',
       }))
       mockWikiContent('## Wiki Anchor Requirement\n\n升级示例服务运行时和构建工具。')
@@ -471,7 +471,7 @@ describe('onesAdapter', () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
         description: '',
-        descriptionText: '具体需求内容详见wiki：https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-plain-uuid',
+        descriptionText: '具体需求内容详见wiki：https://ones.test/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-plain-uuid',
       }))
       mockWikiContent('## Wiki Plain Requirement\n\n升级示例代码检查配置。')
 
@@ -486,7 +486,7 @@ describe('onesAdapter', () => {
       mockWikiContent('## Direct Wiki Requirement\n\n支持直接粘贴 Wiki 页面 URL 获取需求详情。')
 
       const result = await adapter.getRequirement({
-        id: 'https://ones.example/wiki/#/team/team-direct-uuid/space/space-direct-uuid/page/wiki-direct-uuid',
+        id: 'https://ones.test/wiki/#/team/team-direct-uuid/space/space-direct-uuid/page/wiki-direct-uuid',
       })
 
       const graphqlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/items/graphql'))
@@ -639,6 +639,17 @@ describe('onesAdapter', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
+    it('should reject a wiki URL from a different origin or with encoded path injection', async () => {
+      await expect(adapter.getRequirement({
+        id: 'https://attacker.test/wiki/#/team/team-direct-uuid/space/space-direct-uuid/page/wiki-direct-uuid',
+      })).rejects.toThrow('origin does not match')
+      await expect(adapter.getRequirement({
+        id: 'https://ones.test/wiki/#/team/%2e%2e%2fadmin%3Fx=/space/space-direct-uuid/page/wiki-direct-uuid',
+      })).rejects.toThrow('Unsupported wiki page URL')
+
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     it('should render ONES wiki block content instead of exposing raw JSON', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
@@ -688,8 +699,8 @@ describe('onesAdapter', () => {
     it('should dedupe wiki pages from related wiki pages and task description links', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
-        description: '具体需求内容详见wiki：https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-dup-uuid',
-        descriptionText: '具体需求内容详见wiki：https://ones.example/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-dup-uuid',
+        description: '具体需求内容详见wiki：https://ones.test/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-dup-uuid',
+        descriptionText: '具体需求内容详见wiki：https://ones.test/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/wiki-dup-uuid',
         relatedWikiPages: [
           { uuid: 'wiki-dup-uuid', title: '关联需求 Wiki' },
         ],
@@ -703,6 +714,19 @@ describe('onesAdapter', () => {
       expect(wikiFetchCalls).toHaveLength(1)
       expect(result.description.match(/### 关联需求 Wiki/g)).toHaveLength(1)
       expect(result.description).toContain('只应出现一次')
+    })
+
+    it('should ignore wiki-like links from an unconfigured origin', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        description: 'https://attacker.test/wiki/#/team/team-mock-uuid/space/space-mock-uuid/page/private-wiki-uuid',
+        descriptionText: 'external link',
+      }))
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain('external link')
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/online_page/private-wiki-uuid/'))).toBe(false)
     })
 
     it('should fallback to task detail description when no wiki content is available', async () => {
@@ -748,6 +772,57 @@ describe('onesAdapter', () => {
       // 7 login calls + 1 graphql for first + 1 graphql for second = 9
       expect(mockFetch).toHaveBeenCalledTimes(9)
     })
+
+    it('should skip wiki expansion for a task and point to the next tool', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+        name: '匿名任务',
+        relatedWikiPages: [{ uuid: 'wiki-should-not-load', title: '不应加载' }],
+        relatedWikiPagesCount: 1,
+        descriptionText: '实现导出接口。',
+      }))
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.type).toBe('task')
+      expect(result.raw.workItemKind).toBe('task')
+      expect(result.description).toContain('## Task Detail')
+      expect(result.description).toContain('get_related_issues / get_testcases')
+      expect(result.description).not.toContain('## Requirement Documents')
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/online_page/'))).toBe(false)
+    })
+
+    it('should skip wiki expansion for a defect and point to get_issue_detail', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+        subIssueType: { uuid: 'it-bug', name: '缺陷', detailType: 3 },
+        name: '登录崩溃',
+        relatedWikiPages: [{ uuid: 'wiki-should-not-load', title: '不应加载' }],
+        relatedWikiPagesCount: 1,
+        descriptionText: '登录页白屏。',
+      }))
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.type).toBe('bug')
+      expect(result.raw.workItemKind).toBe('defect')
+      expect(result.description).toContain('## Defect Detail')
+      expect(result.description).toContain('get_issue_detail')
+      expect(result.description).not.toContain('## Requirement Documents')
+    })
+
+    it('should fail closed when a work-item type cannot be classified', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        issueType: { uuid: 'it-custom', name: '自定义类型' },
+      }))
+
+      await expect(adapter.getRequirement({ id: 'abc-123-def' }))
+        .rejects
+        .toThrow('Unable to classify')
+    })
   })
 
   describe('searchRequirements', () => {
@@ -769,10 +844,6 @@ describe('onesAdapter', () => {
       mockLoginFlow()
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(onesFixture.issueTypes),
-      })
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
         json: () => Promise.resolve(onesFixture.searchMine),
       })
 
@@ -786,10 +857,6 @@ describe('onesAdapter', () => {
       mockLoginFlow()
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(onesFixture.issueTypes),
-      })
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
         json: () => Promise.resolve(onesFixture.searchMine),
       })
 
@@ -801,28 +868,59 @@ describe('onesAdapter', () => {
       expect(result.items.find(item => item.id === 'req-004')).toBeUndefined()
     })
 
-    it('should reuse issue type cache across repeated search queries', async () => {
+    it('should classify concrete subtypes without filtering by parent issue type', async () => {
       mockLoginFlow()
+      const subtypeSearch = {
+        data: {
+          buckets: [{
+            key: 'default',
+            tasks: [
+              {
+                key: 'task-subtype-bug',
+                uuid: 'subtype-bug',
+                number: 2101,
+                name: '父任务下的缺陷',
+                issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+                subIssueType: { uuid: 'it-bug', name: '缺陷', detailType: 3 },
+                status: { uuid: 's-todo', name: '待处理', category: 'to_do' },
+                priority: { value: 'high' },
+                assign: { uuid: 'current-user-uuid', name: '当前用户' },
+              },
+              {
+                key: 'task-subtype-task',
+                uuid: 'subtype-task',
+                number: 2102,
+                name: '父需求下的任务',
+                issueType: { uuid: 'it-requirement', name: '需求', detailType: 1 },
+                subIssueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+                status: { uuid: 's-progress', name: '进行中', category: 'in_progress' },
+                priority: { value: 'medium' },
+                assign: { uuid: 'current-user-uuid', name: '当前用户' },
+              },
+            ],
+          }],
+        },
+      }
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(onesFixture.issueTypes),
-      })
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(onesFixture.searchMine),
+        json: () => Promise.resolve(subtypeSearch),
       })
 
-      await adapter.searchRequirements({ query: '查询我所有缺陷' })
+      const bugs = await adapter.searchRequirements({ query: '查询我所有缺陷' })
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(onesFixture.searchMine),
+        json: () => Promise.resolve(subtypeSearch),
       })
+      const tasks = await adapter.searchRequirements({ query: '查询我所有任务' })
 
-      await adapter.searchRequirements({ query: '查询我所有任务' })
-
-      const issueTypeCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('t=issueTypes'))
-      expect(issueTypeCalls).toHaveLength(1)
+      expect(bugs.items.map(item => item.id)).toEqual(['subtype-bug'])
+      expect(tasks.items.map(item => item.id)).toEqual(['subtype-task'])
+      const graphQlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('t=group-task-data'))
+      for (const call of graphQlCalls) {
+        const body = JSON.parse(String(call[1].body))
+        expect(body.variables.filterGroup[0]).not.toHaveProperty('issueType_in')
+      }
     })
 
     it('should return bugs assigned to a named assignee when query uses 负责人为', async () => {
@@ -830,10 +928,6 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(onesFixture.userSearch),
-      })
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(onesFixture.issueTypes),
       })
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -864,10 +958,6 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(onesFixture.userSearch),
-      })
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(onesFixture.issueTypes),
       })
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -914,10 +1004,6 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(userSearchWithDisplayName),
-      })
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(onesFixture.issueTypes),
       })
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -1190,13 +1276,10 @@ describe('onesAdapter', () => {
 
       const result = await adapter.getRelatedIssues({ taskId: 'mock-parent-task-uuid' })
 
-      // 2 pending defects: bug-001 (current user) and bug-004 (other user)
       expect(result).toHaveLength(2)
-      // Current user's defect first
       expect(result[0].key).toBe('task-bug-001')
       expect(result[0].name).toBe('登录页面崩溃')
       expect(result[0].assignUuid).toBe('current-user-uuid')
-      // Other user's defect second
       expect(result[1].key).toBe('task-bug-004')
       expect(result[1].name).toBe('表单提交失败')
       expect(result[1].assignUuid).toBe('other-user-uuid')
@@ -1212,8 +1295,8 @@ describe('onesAdapter', () => {
       const result = await adapter.getRelatedIssues({ taskId: 'mock-parent-task-uuid' })
 
       const uuids = result.map(r => r.uuid)
-      expect(uuids).not.toContain('bug-uuid-002') // done, not to_do
-      expect(uuids).not.toContain('feat-uuid-003') // not a defect
+      expect(uuids).not.toContain('bug-uuid-002')
+      expect(uuids).not.toContain('feat-uuid-003')
     })
 
     it('should return empty array when no matching defects', async () => {
@@ -1221,12 +1304,38 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          data: { task: { key: 'task-xxx', relatedTasks: [] } },
+          data: {
+            task: {
+              key: 'task-xxx',
+              issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+              relatedTasks: [],
+            },
+          },
         }),
       })
 
       const result = await adapter.getRelatedIssues({ taskId: 'xxx' })
       expect(result).toHaveLength(0)
+    })
+
+    it('should reject a defect parent for getRelatedIssues', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            task: {
+              key: 'task-bug-parent',
+              issueType: { uuid: 'it-bug', name: '缺陷', detailType: 3 },
+              relatedTasks: [],
+            },
+          },
+        }),
+      })
+
+      await expect(adapter.getRelatedIssues({ taskId: 'bug-parent' }))
+        .rejects
+        .toThrow('get_issue_detail')
     })
   })
 
@@ -1354,6 +1463,27 @@ describe('onesAdapter', () => {
       expect(result.descriptionRich).not.toContain('stale-url2.png')
     })
 
+    it('should reject path injection in attachment resource UUIDs before fetching', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          desc: '<img data-uuid="../admin?token=steal" src="https://ones.test/stale.png" />',
+          desc_rich: '<img data-uuid="../admin?token=steal" src="https://ones.test/stale.png" />',
+        }),
+      })
+
+      const result = await adapter.getIssueDetail({ issueId: 'mock-issue-uuid' })
+
+      expect(result.description).toContain('stale.png')
+      expect(mockFetch).toHaveBeenCalledTimes(9)
+      expect(mockFetch.mock.calls.map(call => String(call[0])).join('\n')).not.toContain('/admin')
+    })
+
     it('should throw if issue not found', async () => {
       mockLoginFlow()
       mockFetch.mockResolvedValueOnce({
@@ -1364,6 +1494,31 @@ describe('onesAdapter', () => {
       await expect(adapter.getIssueDetail({ issueId: 'nonexistent' }))
         .rejects
         .toThrow('not found')
+    })
+
+    it('should reject a requirement ID for getIssueDetail', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            task: {
+              key: 'task-req',
+              uuid: 'req-uuid',
+              name: '导出报表',
+              description: '',
+              descriptionText: '',
+              desc_rich: '',
+              issueType: { name: '需求', detailType: 1 },
+              status: { name: '进行中', category: 'in_progress' },
+            },
+          },
+        }),
+      })
+
+      await expect(adapter.getIssueDetail({ issueId: 'req-uuid' }))
+        .rejects
+        .toThrow('get_work_item')
     })
   })
 
@@ -1392,6 +1547,8 @@ describe('onesAdapter', () => {
       })
 
       const result = await adapter.getTestcases({ taskNumber: 100, libraryUuid: 'lib-uuid-001' })
+      const searchRequest = JSON.parse(String(mockFetch.mock.calls[7][1].body))
+      expect(searchRequest.query).toContain('subIssueType { uuid name detailType }')
 
       expect(result.taskNumber).toBe(100)
       expect(result.taskName).toBe('#100 功能模块重构')
@@ -1439,6 +1596,33 @@ describe('onesAdapter', () => {
       await expect(adapter.getTestcases({ taskNumber: 100, libraryUuid: 'lib-uuid-001' }))
         .rejects
         .toThrow('No testcase module matching "#100"')
+    })
+
+    it('should reject a defect number for getTestcases', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          data: {
+            buckets: [{
+              key: 'default',
+              tasks: [{
+                uuid: 'bug-100',
+                number: 100,
+                name: '登录崩溃',
+                issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+                subIssueType: { uuid: 'it-bug', name: '缺陷', detailType: 3 },
+              }],
+            }],
+          },
+        }),
+      })
+
+      await expect(adapter.getTestcases({ taskNumber: 100 }))
+        .rejects
+        .toThrow('get_issue_detail')
+      expect(mockFetch).toHaveBeenCalledTimes(8)
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('t=library-select'))).toBe(false)
     })
   })
 })
