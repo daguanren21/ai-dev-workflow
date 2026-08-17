@@ -1,6 +1,6 @@
 {
   "name": "ai-dev-requirements",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for fetching and classifying ONES requirements, tasks, and defects",
   "type": "module",
   "main": "./dist/index.cjs",
