@@ -1,5 +1,11 @@
 # ai-dev-requirements
 
+## 0.2.1
+
+### Patch Changes
+
+- [`96e7cfa`](https://github.com/daguanren21/ai-dev-workflow/commit/96e7cfa156a8ded584cb22abbe76e4aa9c4f2729) Thanks [@daguanren21](https://github.com/daguanren21)! - Refresh inline ONES requirement images through signed attachment URLs and support display-ID lookups without optional related-activity failures blocking the result.
+
 ## 0.2.0
 
 ### Minor Changes
