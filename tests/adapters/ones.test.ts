@@ -110,7 +110,7 @@ function mockRelatedActivitiesResponse(relatedActivities: Record<string, unknown
     json: () => Promise.resolve({
       data: {
         task: {
-          key: 'task-Nipqc3sbNrswmlcw',
+          key: 'task-related-demo-uuid',
           relatedActivities,
           relatedActivitiesCount: relatedActivities.length,
         },
@@ -345,29 +345,29 @@ describe('onesAdapter', () => {
 
     it('should fetch related work items through onesql with the resolved requirement id', async () => {
       mockLoginFlow()
-      mockProjectList('HYXT', 'project-hyxt-uuid')
+      mockProjectList('DEMO', 'project-demo-uuid')
       mockTaskSearch([
         {
-          key: 'task-Nipqc3sbNrswmlcw',
-          uuid: 'Nipqc3sbNrswmlcw',
-          number: 150446,
-          name: 'MMS 构建工具迁移',
+          key: 'task-related-demo-uuid',
+          uuid: 'related-demo-uuid',
+          number: 2002,
+          name: '匿名需求',
           issueType: { uuid: 'it-requirement', name: '需求' },
           status: { uuid: 's1', name: '开发已分派', category: 'in_progress' },
-          project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+          project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
         },
       ])
       mockTaskResponse(makeRequirementTask({
-        key: 'task-Nipqc3sbNrswmlcw',
-        uuid: 'Nipqc3sbNrswmlcw',
-        number: 150446,
-        name: 'MMS 构建工具迁移',
-        project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+        key: 'task-related-demo-uuid',
+        uuid: 'related-demo-uuid',
+        number: 2002,
+        name: '匿名需求',
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
       }))
       mockRelatedActivitiesResponse([
         {
           uuid: 'activity-config-migration',
-          name: 'HYXT-150446 基础配置迁移',
+          name: 'DEMO-2002 配置迁移',
           projectUUID: 'ppm-project-uuid',
           project_uuid: 'ppm-project-uuid',
           relatedChild: 'related-child-uuid',
@@ -375,7 +375,7 @@ describe('onesAdapter', () => {
         },
       ])
 
-      const result = await adapter.getRequirement({ id: 'HYXT-150446' })
+      const result = await adapter.getRequirement({ id: 'DEMO-2002' })
 
       const oneSqlCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/workitems/onesql'))
       expect(oneSqlCall?.[0]).toBe('https://ones.test/project/api/ones-project/team/team-1/workitems/onesql')
@@ -383,13 +383,13 @@ describe('onesAdapter', () => {
 
       const requestBody = JSON.parse(String(oneSqlCall?.[1].body))
       expect(requestBody.variables).toEqual([
-        { key: 'task-Nipqc3sbNrswmlcw' },
+        { key: 'task-related-demo-uuid' },
         'Task',
         null,
         null,
       ])
       expect(result.description).toContain('## Related Work Items')
-      expect(result.description).toContain('HYXT-150446 基础配置迁移')
+      expect(result.description).toContain('DEMO-2002 配置迁移')
       expect(result.description).toContain('activity-config-migration')
       expect(result.raw.relatedActivities).toEqual([
         expect.objectContaining({ uuid: 'activity-config-migration' }),
@@ -398,47 +398,47 @@ describe('onesAdapter', () => {
 
     it('should omit the related work items section when onesql returns no activities', async () => {
       mockLoginFlow()
-      mockProjectList('HYXT', 'project-hyxt-uuid')
+      mockProjectList('DEMO', 'project-demo-uuid')
       mockTaskSearch([{
-        key: 'task-Nipqc3sbNrswmlcw',
-        uuid: 'Nipqc3sbNrswmlcw',
-        number: 150446,
-        name: 'MMS 构建工具迁移',
+        key: 'task-related-demo-uuid',
+        uuid: 'related-demo-uuid',
+        number: 2002,
+        name: '匿名需求',
         issueType: { uuid: 'it-requirement', name: '需求' },
         status: { uuid: 's1', name: '开发已分派', category: 'in_progress' },
-        project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
       }])
       mockTaskResponse(makeRequirementTask({
-        key: 'task-Nipqc3sbNrswmlcw',
-        uuid: 'Nipqc3sbNrswmlcw',
-        number: 150446,
-        name: 'MMS 构建工具迁移',
+        key: 'task-related-demo-uuid',
+        uuid: 'related-demo-uuid',
+        number: 2002,
+        name: '匿名需求',
       }))
       mockRelatedActivitiesResponse([])
 
-      const result = await adapter.getRequirement({ id: 'HYXT-150446' })
+      const result = await adapter.getRequirement({ id: 'DEMO-2002' })
 
       expect(result.description).not.toContain('## Related Work Items')
       expect(result.raw.relatedActivities).toEqual([])
     })
 
-    it('should report a sanitized onesql error', async () => {
+    it('should return a display-id task when optional related activity lookup fails', async () => {
       mockLoginFlow()
-      mockProjectList('HYXT', 'project-hyxt-uuid')
+      mockProjectList('DEMO', 'project-demo-uuid')
       mockTaskSearch([{
-        key: 'task-Nipqc3sbNrswmlcw',
-        uuid: 'Nipqc3sbNrswmlcw',
-        number: 150446,
-        name: 'MMS 构建工具迁移',
+        key: 'task-related-demo-uuid',
+        uuid: 'related-demo-uuid',
+        number: 2002,
+        name: '匿名需求',
         issueType: { uuid: 'it-requirement', name: '需求' },
         status: { uuid: 's1', name: '开发已分派', category: 'in_progress' },
-        project: { uuid: 'project-hyxt-uuid', name: '海运系统' },
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
       }])
       mockTaskResponse(makeRequirementTask({
-        key: 'task-Nipqc3sbNrswmlcw',
-        uuid: 'Nipqc3sbNrswmlcw',
-        number: 150446,
-        name: 'MMS 构建工具迁移',
+        key: 'task-related-demo-uuid',
+        uuid: 'related-demo-uuid',
+        number: 2002,
+        name: '匿名需求',
       }))
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -446,10 +446,12 @@ describe('onesAdapter', () => {
         text: () => Promise.resolve('{"errcode":"NotFound.WorkItemType"}'),
       })
 
-      const result = adapter.getRequirement({ id: 'HYXT-150446' })
+      const result = await adapter.getRequirement({ id: 'DEMO-2002' })
 
-      await expect(result).rejects.toThrow('ONES OneSQL error: 404')
-      await expect(result).rejects.not.toThrow('test-access-token')
+      expect(result.id).toBe('related-demo-uuid')
+      expect(result.title).toBe('#2002 匿名需求')
+      expect(result.description).not.toContain('## Related Work Items')
+      expect(result.raw.relatedActivities).toEqual([])
     })
 
     it('should fetch wiki content from an anchor link in task description', async () => {
@@ -740,6 +742,46 @@ describe('onesAdapter', () => {
 
       expect(result.description).toContain('## Requirement Detail')
       expect(result.description).toContain('需求简述：【系统优化】升级示例运行时和构建工具。')
+    })
+
+    it('should refresh inline requirement images and expose them as attachments', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        description: '<p>需求正文</p><img data-uuid="requirement-node-uuid" src="https://ones.test/project/api/project/team/team-1/res/attachment/requirement-resource-uuid">',
+        desc_rich: '<p>需求正文</p><img data-uuid="requirement-node-uuid" src="https://ones.test/project/api/project/team/team-1/res/attachment/requirement-resource-uuid">',
+        descriptionText: '需求正文\n[image]',
+      }))
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          desc: '<p>需求正文</p><img data-uuid="requirement-node-uuid" src="https://ones.test/project/api/project/team/team-1/res/attachment/requirement-resource-uuid">',
+          desc_rich: '<p>需求正文</p><img data-uuid="requirement-node-uuid" src="https://ones.test/project/api/project/team/team-1/res/attachment/requirement-resource-uuid">',
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        status: 302,
+        headers: new Headers({
+          location: 'https://cdn.ones.test/fresh-requirement.png?X-Amz-Signature=fresh',
+        }),
+      })
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain('需求正文\n[image]')
+      expect(result.description).not.toContain('X-Amz-Signature')
+      expect(result.attachments).toEqual([
+        {
+          id: 'requirement-node-uuid',
+          name: 'fresh-requirement.png',
+          url: 'https://cdn.ones.test/fresh-requirement.png?X-Amz-Signature=fresh',
+          mimeType: 'image/png',
+          size: 0,
+        },
+      ])
+      const refreshCalls = mockFetch.mock.calls.filter(call =>
+        String(call[0]).includes('/res/attachment/requirement-resource-uuid'),
+      )
+      expect(refreshCalls).toHaveLength(1)
     })
 
     it('should throw if task not found', async () => {
@@ -1421,6 +1463,38 @@ describe('onesAdapter', () => {
       expect(result.name).toContain('登录页面')
     })
 
+    it('should resolve issue by display id', async () => {
+      mockLoginFlow()
+      mockProjectList('DEMO', 'project-demo-uuid')
+      mockTaskSearch([{
+        key: 'task-mock-issue-uuid',
+        uuid: 'bug-uuid-001',
+        number: 2001,
+        name: '登录页面崩溃',
+        issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+        subIssueType: { uuid: 'it-bug', name: '缺陷', detailType: 3 },
+        status: { uuid: 's-todo', name: '待处理', category: 'to_do' },
+        project: { uuid: 'project-demo-uuid', name: 'Demo Project' },
+      }])
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(onesFixture.issueDetail),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ desc: '<p>Fresh</p>', desc_rich: '<p>Fresh</p>' }),
+      })
+
+      const result = await adapter.getIssueDetail({ issueId: 'DEMO-2001' })
+
+      expect(result.key).toBe('task-mock-issue-uuid')
+      const graphQlCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/items/graphql'))
+      const searchCallBody = JSON.parse(String(graphQlCalls[1][1].body))
+      expect(searchCallBody.variables.filterGroup).toEqual([
+        { number_in: [2001], project_in: ['project-demo-uuid'] },
+      ])
+    })
+
     it('should refresh image URLs via attachment API when data-uuid present', async () => {
       mockLoginFlow()
       // 8. GraphQL issue detail
@@ -1441,12 +1515,7 @@ describe('onesAdapter', () => {
         status: 302,
         headers: new Headers({ location: 'https://cdn.ones.test/fresh-img1.png?X-Amz-Signature=new1' }),
       })
-      // 11. getAttachmentUrl for res-uuid-1 in desc_rich (302 redirect)
-      mockFetch.mockResolvedValueOnce({
-        status: 302,
-        headers: new Headers({ location: 'https://cdn.ones.test/fresh-img1.png?X-Amz-Signature=new1' }),
-      })
-      // 12. getAttachmentUrl for res-uuid-2 in desc_rich (302 redirect)
+      // 11. getAttachmentUrl for res-uuid-2; res-uuid-1 is shared by desc and desc_rich
       mockFetch.mockResolvedValueOnce({
         status: 302,
         headers: new Headers({ location: 'https://cdn.ones.test/fresh-img2.png?X-Amz-Signature=new2' }),

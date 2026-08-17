@@ -5,7 +5,7 @@ import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE }
 import { downloadTrustedImages } from '../utils/safe-image.js'
 
 export const GetIssueDetailSchema = z.object({
-  issueId: z.string().describe('The issue task ID or key (e.g. "mock-issue-uuid" or "task-mock-issue-uuid")'),
+  issueId: z.string().describe('ONES defect UUID, task key, number, or display ID (for example "DEMO-2001")'),
   source: z.string().optional().describe('Source to fetch from. If omitted, uses the default source.'),
 })
 

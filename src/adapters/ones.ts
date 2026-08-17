@@ -784,6 +784,31 @@ function getTaskDetailText(task: OnesTaskNode): string {
     || htmlToPlainText(task.desc_rich ?? task.description ?? '')
 }
 
+interface HtmlImageReference {
+  tag: string
+  src: string
+  resourceUuid: string
+}
+
+function extractHtmlImageReferences(html: string): HtmlImageReference[] {
+  return Array.from(html.matchAll(/<img\b[^>]*>/gi), (match) => {
+    const tag = match[0]
+    const srcMatch = tag.match(/\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+    const resourceMatch = tag.match(/\bdata-uuid\s*=\s*(?:"([^"]*)"|'([^']*)')/i)
+
+    return {
+      tag,
+      src: (srcMatch?.[1] ?? srcMatch?.[2] ?? '').replace(/&amp;/gi, '&').trim(),
+      resourceUuid: (resourceMatch?.[1] ?? resourceMatch?.[2] ?? '').trim(),
+    }
+  })
+}
+
+function containsInlineTaskImages(task: OnesTaskNode): boolean {
+  return [task.description, task.desc_rich].some(value => typeof value === 'string' && /<img\b/i.test(value))
+    || /\[(?:image|图片)\]/i.test(task.descriptionText ?? '')
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -1478,15 +1503,21 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   private async fetchRelatedActivities(taskKey: string): Promise<OnesRelatedActivity[]> {
-    const data = await this.onesql<{
-      data?: {
-        task?: {
-          relatedActivities?: OnesRelatedActivity[]
-        } | null
-      }
-    }>(RELATED_ACTIVITIES_QUERY, { key: taskKey }, 'Task')
+    try {
+      const data = await this.onesql<{
+        data?: {
+          task?: {
+            relatedActivities?: OnesRelatedActivity[]
+          } | null
+        }
+      }>(RELATED_ACTIVITIES_QUERY, { key: taskKey }, 'Task')
 
-    return data.data?.task?.relatedActivities ?? []
+      return data.data?.task?.relatedActivities ?? []
+    }
+    catch {
+      // Related activities are optional enrichment and must not block work-item lookup.
+      return []
+    }
   }
 
   private async searchTaskByNumber(taskNumber: number): Promise<OnesTaskNode | null> {
@@ -1746,40 +1777,136 @@ export class OnesAdapter extends BaseAdapter {
     }
   }
 
+  private getAttachmentResourceUuid(image: HtmlImageReference): string {
+    if (image.src) {
+      try {
+        const source = new URL(image.src, this.config.apiBase)
+        if (source.origin === new URL(this.config.apiBase).origin) {
+          const match = source.pathname.match(/\/res\/attachment\/([^/]+)$/)
+          const resourceUuid = match?.[1] ? decodeOnesPathIdentifier(match[1]) : null
+          if (resourceUuid)
+            return resourceUuid
+        }
+      }
+      catch {
+        // Fall back to data-uuid for non-URL or legacy image sources.
+      }
+    }
+
+    return image.resourceUuid
+  }
+
   /**
    * Replace stale image URLs in HTML with fresh signed URLs from the attachment API.
-   * Extracts data-uuid from <img> tags and resolves fresh URLs in parallel.
+   * Prefer the resource identifier from the attachment URL because ONES data-uuid
+   * can identify the editor node instead of the underlying attachment.
    */
-  private async refreshImageUrls(html: string): Promise<string> {
+  private async refreshImageUrls(
+    html: string,
+    freshUrlCache: Map<string, Promise<string | null>> = new Map(),
+  ): Promise<string> {
     if (!html)
       return html
 
-    // Extract all img tags with data-uuid
-    const imgRegex = /<img\s[^>]*data-uuid="([^"]+)"[^>]*>/g
-    const matches = Array.from(html.matchAll(imgRegex))
-
-    if (matches.length === 0)
+    const images = extractHtmlImageReferences(html).flatMap((image) => {
+      const resourceUuid = this.getAttachmentResourceUuid(image)
+      return resourceUuid ? [{ image, resourceUuid }] : []
+    })
+    if (images.length === 0)
       return html
 
-    // Resolve fresh URLs in parallel
     const replacements = await Promise.all(
-      matches.map(async (match) => {
-        const dataUuid = match[1]
-        const freshUrl = await this.getAttachmentUrl(dataUuid)
-        return { fullMatch: match[0], dataUuid, freshUrl }
+      images.map(async ({ image, resourceUuid }) => {
+        let freshUrl = freshUrlCache.get(resourceUuid)
+        if (!freshUrl) {
+          freshUrl = this.getAttachmentUrl(resourceUuid)
+          freshUrlCache.set(resourceUuid, freshUrl)
+        }
+
+        return {
+          fullMatch: image.tag,
+          freshUrl: await freshUrl,
+        }
       }),
     )
 
     let result = html
     for (const { fullMatch, freshUrl } of replacements) {
-      if (freshUrl) {
-        // Replace the src attribute in the img tag with the fresh URL
-        const updatedImg = fullMatch.replace(/src="[^"]*"/, `src="${freshUrl}"`)
-        result = result.replace(fullMatch, updatedImg)
-      }
+      if (!freshUrl)
+        continue
+
+      const updatedImg = /\bsrc\s*=/i.test(fullMatch)
+        ? fullMatch.replace(/\bsrc\s*=\s*(?:"[^"]*"|'[^']*')/i, `src="${freshUrl}"`)
+        : fullMatch.replace(/<img\b/i, `<img src="${freshUrl}"`)
+      result = result.replace(fullMatch, updatedImg)
     }
 
     return result
+  }
+
+  private async getFreshTaskDescriptions(
+    task: Pick<OnesTaskNode, 'uuid' | 'description' | 'desc_rich'>,
+  ): Promise<{ description: string, descriptionRich: string }> {
+    const taskInfo = await this.fetchTaskInfo(task.uuid)
+    const rawDescription = typeof taskInfo.desc === 'string'
+      ? taskInfo.desc
+      : task.description ?? ''
+    const rawDescriptionRich = typeof taskInfo.desc_rich === 'string'
+      ? taskInfo.desc_rich
+      : task.desc_rich ?? task.description ?? ''
+    const freshUrlCache = new Map<string, Promise<string | null>>()
+    const [description, descriptionRich] = await Promise.all([
+      this.refreshImageUrls(rawDescription, freshUrlCache),
+      this.refreshImageUrls(rawDescriptionRich, freshUrlCache),
+    ])
+
+    return { description, descriptionRich }
+  }
+
+  private async getTaskImageAttachments(task: OnesTaskNode): Promise<Attachment[]> {
+    const { description, descriptionRich } = await this.getFreshTaskDescriptions(task)
+    const images = [
+      ...extractHtmlImageReferences(descriptionRich),
+      ...extractHtmlImageReferences(description),
+    ]
+    const seen = new Set<string>()
+    const attachments: Attachment[] = []
+
+    for (const image of images) {
+      if (!image.src)
+        continue
+
+      let url: string
+      try {
+        url = new URL(image.src, this.config.apiBase).toString()
+      }
+      catch {
+        continue
+      }
+
+      if (this.classifyRemoteImageUrl(url) === 'untrusted')
+        continue
+
+      const identity = image.resourceUuid || url
+      if (seen.has(identity))
+        continue
+      seen.add(identity)
+
+      const pathname = new URL(url).pathname
+      const pathName = attachmentNameFromPath(pathname)
+      const name = pathName && pathName !== '/'
+        ? pathName
+        : `image-${attachments.length + 1}.png`
+      attachments.push({
+        id: image.resourceUuid || `${task.uuid}-image-${attachments.length + 1}`,
+        name,
+        url,
+        mimeType: mimeTypeFromFileName(pathname),
+        size: 0,
+      })
+    }
+
+    return attachments
   }
 
   /**
@@ -1952,12 +2079,17 @@ export class OnesAdapter extends BaseAdapter {
         wikiRefs.set(wikiUuid, { title: `Wiki ${wikiUuid}`, uuid: wikiUuid })
     }
 
-    const wikiContents = await Promise.all(
-      [...wikiRefs.values()].map(async (wiki) => {
-        const rendered = await this.fetchWikiContent(wiki.uuid)
-        return { title: wiki.title, uuid: wiki.uuid, content: rendered.content, attachments: rendered.attachments }
-      }),
-    )
+    const [wikiContents, taskImageAttachments] = await Promise.all([
+      Promise.all(
+        [...wikiRefs.values()].map(async (wiki) => {
+          const rendered = await this.fetchWikiContent(wiki.uuid)
+          return { title: wiki.title, uuid: wiki.uuid, content: rendered.content, attachments: rendered.attachments }
+        }),
+      ),
+      containsInlineTaskImages(task)
+        ? this.getTaskImageAttachments(task)
+        : Promise.resolve([]),
+    ])
 
     const parts: string[] = []
     parts.push(`# #${task.number} ${task.name}`)
@@ -2027,7 +2159,7 @@ export class OnesAdapter extends BaseAdapter {
     }
 
     const wikiAttachments = wikiContents.flatMap(wiki => wiki.attachments)
-    const req = toRequirement(task, parts.join('\n'), wikiAttachments)
+    const req = toRequirement(task, parts.join('\n'), [...wikiAttachments, ...taskImageAttachments])
     req.raw = {
       ...req.raw,
       relatedActivities,
@@ -2365,40 +2497,7 @@ export class OnesAdapter extends BaseAdapter {
   }
 
   async getIssueDetail(params: GetIssueDetailParams): Promise<IssueDetail> {
-    let issueKey: string
-
-    // Support number lookup (e.g. "2001" or "#2001")
-    const numMatch = params.issueId.match(/^#?(\d+)$/)
-    if (numMatch) {
-      const taskNumber = Number.parseInt(numMatch[1], 10)
-      const searchData = await this.graphql<{
-        data?: { buckets?: Array<{ tasks?: Array<{ uuid: string, number: number }> }> }
-      }>(
-        SEARCH_TASKS_QUERY,
-        {
-          groupBy: { tasks: {} },
-          groupOrderBy: null,
-          orderBy: { createTime: 'DESC' },
-          filterGroup: [{ number_in: [taskNumber] }],
-          search: null,
-          pagination: { limit: 10, preciseCount: false },
-          limit: 10,
-        },
-        'group-task-data',
-      )
-
-      const allTasks = searchData.data?.buckets?.flatMap(b => b.tasks ?? []) ?? []
-      const found = allTasks.find(t => t.number === taskNumber)
-      if (!found) {
-        throw new Error(`ONES: Issue #${taskNumber} not found in current team`)
-      }
-      issueKey = `task-${found.uuid}`
-    }
-    else {
-      issueKey = params.issueId.startsWith('task-')
-        ? params.issueId
-        : `task-${params.issueId}`
-    }
+    const { key: issueKey } = await this.resolveTaskRef(params.issueId)
 
     const data = await this.graphql<{
       data?: {
@@ -2437,14 +2536,10 @@ export class OnesAdapter extends BaseAdapter {
       throw unsupportedWorkItemToolError(params.issueId, kind, 'get_issue_detail', 'get_work_item')
     }
 
-    // Fetch fresh description via REST API
-    const taskInfo = await this.fetchTaskInfo(task.uuid)
-    const rawDescription = (taskInfo.desc as string) ?? task.description ?? ''
-    const rawDescRich = (taskInfo.desc_rich as string) ?? task.desc_rich ?? ''
-
-    // Refresh image URLs via attachment API (signed URLs expire after 1 hour)
-    const freshDescription = await this.refreshImageUrls(rawDescription)
-    const freshDescRich = await this.refreshImageUrls(rawDescRich)
+    const {
+      description: freshDescription,
+      descriptionRich: freshDescRich,
+    } = await this.getFreshTaskDescriptions(task)
 
     return {
       key: task.key,
