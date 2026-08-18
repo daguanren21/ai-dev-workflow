@@ -4,10 +4,12 @@
 
 ### Control
 - type: test
+- stage: verification
 - agent_role: tester
 - scheduler: parallel
 - isolation_key: tests/<module>/
 - dependencies: []
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: standard
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -18,6 +20,7 @@
 - Acceptance Criteria: docs/plans/<feature-name>/user-stories.md
 
 ### Steps
+- Confirm every required gate applies to the current story, plan, and validation revisions before writing tests.
 - Identify the behavior, edge case, or regression to verify.
 - Add the smallest test that proves the behavior.
 - Run the test and confirm it fails when the implementation is absent or broken when practical.
@@ -36,6 +39,7 @@
 - Broader Gate: `pnpm test:run`
 
 ### Done When
+- Test changes stayed inside the approved mutation boundary and used current gate approvals.
 - The test maps to an acceptance criterion or documented regression.
 - The targeted gate passes.
 - Standard review has no blocking findings.

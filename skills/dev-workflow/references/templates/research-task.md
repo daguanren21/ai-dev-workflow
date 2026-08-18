@@ -4,10 +4,12 @@
 
 ### Control
 - type: research
+- stage: discovery
 - agent_role: researcher
 - scheduler: parallel
 - isolation_key: research/<topic>
 - dependencies: []
+- required_gates: []
 - review_level: light
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -18,6 +20,7 @@
 - Decision Needed: <specific decision>
 
 ### Steps
+- Keep the task read-only; discovery does not authorize source or external mutations.
 - Identify primary sources and repository-local evidence.
 - Gather only the context needed for the decision.
 - Compare viable options with tradeoffs.
@@ -37,6 +40,7 @@
 - Scope Check: recommendation answers the declared decision.
 
 ### Done When
+- No source, repository, or external system was mutated.
 - The decision can be used directly by the harness plan.
 - Unknowns and assumptions are explicit.
 - Light review has no blocking findings.

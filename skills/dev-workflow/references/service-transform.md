@@ -1,5 +1,9 @@
 # Service Layer Transform
 
+> Optional specialized reference. Load only when the approved plan must reconcile frontend Mock contracts with backend API contracts. This pattern is not a default harness phase and does not authorize implementation by itself.
+
+The current user stories, passing coverage report, approved plan, and repository conventions take precedence over this example.
+
 ## Problem
 
 Frontend uses Mock data during development. On integration, backend fields differ in three ways:
@@ -12,7 +16,7 @@ Frontend uses Mock data during development. On integration, backend fields diffe
 
 ## Solution: Transform in Service Layer
 
-**No separate `adapters/` directory.** Transform functions live inside service files. Components never change.
+When the consuming project uses this pattern, keep transform functions inside service files instead of creating a separate `adapters/` directory. Components consume the stable frontend contract.
 
 ```
 Component → FrontendType ← service function return type
@@ -36,7 +40,7 @@ src/api/{module}/
 ## Implementation Pattern
 
 ```typescript
-// ① Frontend type (component contract, never changes)
+// 1. Frontend type (component contract)
 export interface OrderInfo {
   orderId: string
   carrier: string
@@ -44,7 +48,7 @@ export interface OrderInfo {
   status: string
 }
 
-// ② Backend type (added during integration)
+// 2. Backend type (added during integration)
 interface BackendOrderInfo {
   order_id: string
   carrier_info: { code: string; name: string }
@@ -52,7 +56,7 @@ interface BackendOrderInfo {
   status: number       // numeric enum
 }
 
-// ③ Transform function
+// 3. Transform function
 const STATUS_MAP: Record<number, string> = {
   1: 'Pending', 2: 'Shipped', 3: 'Canceled',
 }
@@ -66,7 +70,7 @@ function transformOrder(raw: BackendOrderInfo): OrderInfo {
   }
 }
 
-// ④ Query: backend → frontend
+// 4. Query: backend to frontend
 export function getOrderList(query: PageParams) {
   return request<PageResponse<BackendOrderInfo>>({
     url: '/api/order/page',
@@ -77,7 +81,7 @@ export function getOrderList(query: PageParams) {
   }))
 }
 
-// ⑤ Submit: frontend → backend
+// 5. Submit: frontend to backend
 function toBackendParams(form: OrderForm): BackendOrderForm {
   return {
     order_id: form.orderId,
@@ -97,7 +101,7 @@ export function createOrder(form: OrderForm) {
 ## Integration Flow
 
 ```
-Backend ready → Add BackendType → Write transform → Add .then(transform) → Components unchanged ✅
+Backend ready -> Add BackendType -> Write transform -> Add `.then(transform)` -> Keep the component contract stable
 ```
 
 ## When Components Must Change

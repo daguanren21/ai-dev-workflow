@@ -1,114 +1,154 @@
-# 需求符合性校验规范
+# Requirement Coverage Validation
 
-> 在技术设计完成后、代码实现前，逐条校验设计方案是否完整覆盖产品需求。
+> Validate the current implementation plan against approved user stories before requesting plan approval or starting implementation.
 
----
+## Gate Position
 
-## 校验时机
-
+```text
+Approved User Stories
+        |
+        v
+Implementation Plan
+        |
+        v
+Coverage Validation
+        |
+        +---- Conditional or Fail ----> revise and revalidate
+        |
+        v
+Plan Approval
+        |
+        v
+Implementation
 ```
-③ 技术设计 → ④ 技能匹配 → ⑤ 最佳实践 → 【⑥ 需求符合性校验】 → ⑦ 代码实现
-```
 
-校验通过后方可进入代码实现阶段。校验不通过则回退到技术设计阶段修正。
+Coverage validation always runs. A passing report unlocks the plan-approval prompt; it does not itself authorize implementation.
 
-## 校验输入
+## Inputs
 
-| 输入 | 来源 |
-|------|------|
-| 原始需求 | `requirements.md` |
-| 用户故事 + 验收标准 | `user-stories.md` |
-| 技术设计方案 | `design.md` |
-| 任务列表 | `tasks.md` |
+| Input | Requirement |
+|-------|-------------|
+| Source context | Usable source or sanitized source summary with decisions and assumptions |
+| User stories | Current Gate 1-approved `user-stories.md` revision |
+| Harness plan | Current `implementation-plan.md` revision |
+| Repository evidence | Relevant architecture, tests, conventions, and available deterministic checks |
 
-## 校验流程
+If the user stories are not approved or the plan is stale, stop before validation.
 
-### Step 1: 构建需求追踪矩阵
+## Step 1: Build The Traceability Matrix
 
-逐条提取需求点，建立需求 → 用户故事 → 设计 → 任务的映射关系：
+Map each requirement to a story, harness task, and verification gate:
 
 ```markdown
-| # | 需求点 | 用户故事 | 设计章节 | 实现任务 | 状态 |
-|---|--------|---------|---------|---------|------|
-| R1 | 用户可通过手机号登录 | US-1 | 3.1 认证模块 | Task-1, Task-2 | ✅ 覆盖 |
-| R2 | 登录失败锁定账户 | US-2 | 3.1 认证模块 | Task-3 | ✅ 覆盖 |
-| R3 | 支持第三方 OAuth | — | — | — | ❌ 未覆盖 |
+| Requirement | User Story | Harness Task | Verification Gate | Status |
+|-------------|------------|--------------|-------------------|--------|
+| R1 | US-1 | HT-DEV-1 | Targeted test and typecheck | Covered |
+| R2 | US-2 | HT-DEV-2, HT-TEST-1 | Integration test | Covered |
+| R3 | None | None | None | Missing |
 ```
 
-### Step 2: 逐项校验
+Use anonymized requirement labels in persisted artifacts. Do not reproduce private source text merely to populate the matrix.
 
-对每个需求点检查以下 5 项：
+## Step 2: Evaluate Every Requirement
 
-| 校验项 | 说明 | 判定标准 |
-|--------|------|---------|
-| **故事覆盖** | 需求点是否有对应的用户故事 | 每个需求点至少映射到 1 个 US |
-| **验收标准完整** | 用户故事的 AC 是否可验证 | AC 使用 Given/When/Then，无模糊描述 |
-| **设计落地** | 设计方案是否包含该需求的技术实现 | design.md 中有对应章节或说明 |
-| **任务分解** | 是否有具体的实现任务 | tasks.md 中有对应的 task 条目 |
-| **边界覆盖** | 异常流、边界条件是否考虑 | AC 中包含异常场景或设计中有错误处理说明 |
+Check:
 
-### Step 3: 输出校验报告
+| Check | Passing Condition |
+|-------|-------------------|
+| Story coverage | Every core requirement maps to at least one approved user story |
+| Acceptance criteria | Behavior is observable and includes relevant failure or boundary cases |
+| Task coverage | Every acceptance criterion has an implementation, documentation, data, research, or verification owner |
+| Mutation boundary | Each write task declares the files, modules, or external systems it may change |
+| Dependency order | Every prerequisite appears before the task that depends on it |
+| Verification coverage | Every user-visible behavior and critical contract has a deterministic check or explicit review gate |
+| Review coverage | Risk determines an appropriate light, standard, or strict review level |
+| Privacy and safety | No plan artifact requires credentials, full private source bodies, or undeclared mutations |
 
-生成 `validation-report.md`，保存到 `docs/plans/{feature-name}/` 目录：
+## Step 3: Run Coverage Sensors
+
+Use all applicable sensor classes:
+
+| Sensor Class | Checks | Examples |
+|--------------|--------|----------|
+| Maintainability | Internal quality and supportability | lint, typecheck, duplication, complexity, documentation consistency |
+| Architecture | Structural and ownership boundaries | dependency direction, package exports, module ownership, public contracts |
+| Behavior | User-visible correctness | unit tests, integration tests, browser checks, acceptance checks |
+| Safety | Authorization and data handling | mutation confirmation, secrets, private-source retention, destructive actions |
+| Change resilience | Requirement and compatibility drift | version invalidation, migration, backward compatibility, stale task decomposition |
+
+When an existing task decomposition materially differs from the current requirement, classify it as a blocking mismatch and notify the developer. Do not silently implement the stale tasks.
+
+## Step 4: Classify The Result
+
+| Result | Condition | Next Action |
+|--------|-----------|-------------|
+| `Pass` | Every core requirement is covered and no blocking risk remains | Present the plan and report summary at Gate 2 |
+| `Conditional` | Only low-risk, explicitly described exceptions remain | Pause for a developer decision; update artifacts and revalidate |
+| `Fail` | A core requirement, decision, task, mutation boundary, or verification gate is missing | Return to the earliest affected phase |
+
+Rules:
+
+- Coverage percentage is informative, not authoritative.
+- A missing core requirement always fails.
+- A high-risk ambiguity always fails and returns to `/grill-me`.
+- An accepted low-risk exception must be recorded in the revised plan and report before revalidation.
+- Gate 2 may be requested only after the current report is `Pass`.
+
+## Validation Report Contract
+
+Write `docs/plans/{feature-name}/validation-report.md`:
 
 ```markdown
-# 需求符合性校验报告
+# Coverage Validation Report
 
-## 基本信息
-- 需求来源: [ONES/Jira/GitHub] #[ID]
-- 校验时间: [timestamp]
-- 校验结果: ✅ 通过 / ❌ 不通过
+## Artifact Revisions
 
-## 追踪矩阵
-| # | 需求点 | US | 设计 | 任务 | 状态 |
-|---|--------|----|------|------|------|
-| R1 | ... | US-1 | §3.1 | T-1 | ✅ |
+- Stories revision: <revision>
+- Plan revision: <revision>
+- Result: Pass | Conditional | Fail
 
-## 覆盖统计
-- 需求总数: N
-- 已覆盖: X (X/N)
-- 未覆盖: Y
-- 部分覆盖: Z
+## Traceability Matrix
 
-## 未覆盖项
-| # | 需求点 | 缺失环节 | 建议处理方式 |
-|---|--------|---------|------------|
-| R3 | 支持第三方 OAuth | 无用户故事、无设计 | 补充 US 和设计，或与产品确认是否本期实现 |
+| Requirement | User Story | Harness Task | Verification Gate | Status |
+|-------------|------------|--------------|-------------------|--------|
+| R1 | US-1 | HT-DEV-1 | <gate> | Covered |
 
-## 风险项
-| # | 需求点 | 风险描述 | 建议 |
-|---|--------|---------|------|
-| R2 | 登录失败锁定 | AC 未定义锁定阈值和解锁方式 | 与产品确认具体规则 |
+## Sensor Results
 
-## 结论
-[通过/不通过，及后续行动]
+| Sensor Class | Status | Evidence or Gap |
+|--------------|--------|-----------------|
+| Maintainability | Pass | <evidence> |
+| Architecture | Pass | <evidence> |
+| Behavior | Pass | <evidence> |
+| Safety | Pass | <evidence> |
+| Change resilience | Pass | <evidence> |
+
+## Exceptions And Risks
+
+- <accepted exception or none>
+
+## Gate Decision
+
+- Gate 2 eligible: Yes | No
+- Required next action: <action or none>
 ```
 
-## 校验判定规则
+The report references artifact revisions so a changed story or plan makes the result visibly stale.
 
-| 结果 | 条件 | 后续动作 |
-|------|------|---------|
-| ✅ 通过 | 所有需求点均已覆盖，无高风险项 | 进入 ⑦ 代码实现 |
-| ⚠️ 有条件通过 | 覆盖率 ≥ 90%，未覆盖项为低优先级且已标记 | 与开发者确认后进入实现，未覆盖项记入 backlog |
-| ❌ 不通过 | 存在未覆盖的核心需求，或高风险项未解决 | 回退到 ③ 技术设计，补充后重新校验 |
+## Common Omissions
 
-## 暂停点
+| Area | Validation Question |
+|------|---------------------|
+| Authorization | Who may perform the action, and where is the check verified? |
+| Input validation | Are invalid, empty, oversized, and malformed inputs covered? |
+| Concurrency | Can retries or concurrent writes create duplication, races, or stale state? |
+| Performance | Is a measurable performance requirement mapped to an appropriate check? |
+| Compatibility | Does the plan preserve supported callers, formats, and runtime versions? |
+| Internationalization | Are locale behavior and fallback requirements explicit? |
+| Accessibility | Are keyboard, semantic, contrast, and assistive-technology needs covered? |
+| Requirement change | Do existing tasks and tests still match the current approved stories? |
+| Sensitive data | Could artifacts, fixtures, logs, or examples expose private source content? |
 
-校验完成后 **必须暂停**，将校验报告呈现给开发者：
+## Invalidation
 
-- 如果通过：展示摘要，确认后继续
-- 如果不通过：展示未覆盖项和风险项，等待开发者决策（补充设计 / 与产品沟通 / 标记为后续迭代）
-
-## 常见遗漏模式
-
-以下是容易被忽略的需求类型，校验时需特别关注：
-
-| 类型 | 示例 |
-|------|------|
-| 权限控制 | "仅管理员可操作" — 是否有权限校验设计 |
-| 数据校验 | "手机号格式校验" — 前后端是否都有校验 |
-| 并发/竞态 | "库存扣减" — 是否考虑并发安全 |
-| 性能要求 | "列表页 1s 内加载" — 是否有分页/缓存设计 |
-| 兼容性 | "支持 IE11" — 是否影响技术选型 |
-| 国际化 | "支持中英文" — 是否有 i18n 方案 |
-| 无障碍 | "键盘可操作" — 是否有 a11y 设计 |
+The report becomes stale when any approved story, plan task, mutation boundary, dependency, verification gate, or accepted exception changes. Rerun validation before requesting or reusing Gate 2 approval.

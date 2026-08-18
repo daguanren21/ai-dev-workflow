@@ -4,20 +4,23 @@
 
 ### Control
 - type: doc:write
+- stage: implementation
 - agent_role: documenter
 - scheduler: parallel
 - isolation_key: docs/<artifact-name>
 - dependencies: []
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: light
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
 
 ### Inputs
 - Requirement: US-DOC-<number>
-- Source Context: docs/plans/<feature-name>/requirements.md
+- Source Context: docs/plans/<feature-name>/user-stories.md
 - Plan Context: docs/plans/<feature-name>/implementation-plan.md
 
 ### Steps
+- Confirm every required gate applies to the current story, plan, and validation revisions.
 - Identify the audience and required artifact.
 - Update the target document using the repository's existing style.
 - Keep terminology consistent with related docs.
@@ -36,6 +39,7 @@
 - Repository Gate: `pnpm lint`
 
 ### Done When
+- The documentation stayed inside the approved mutation boundary and used current gate approvals.
 - The document accurately describes the implemented behavior or workflow.
 - Cross-references point to existing files.
 - Light review has no blocking findings.

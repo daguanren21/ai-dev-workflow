@@ -4,10 +4,12 @@
 
 ### Control
 - type: code:dev
+- stage: implementation
 - agent_role: implementer
 - scheduler: isolated
 - isolation_key: src/<module>/
 - dependencies: []
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: strict
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -18,6 +20,7 @@
 - Plan: docs/plans/<feature-name>/implementation-plan.md
 
 ### Steps
+- Confirm every required gate applies to the current story, plan, and validation revisions.
 - Write or update the failing test that captures the acceptance criterion.
 - Run the targeted test and record the failure.
 - Implement the smallest production change inside the isolation key.
@@ -37,6 +40,7 @@
 - Type safety: `pnpm typecheck`
 
 ### Done When
+- The task stayed inside the approved mutation boundary and used current gate approvals.
 - The user story acceptance criteria are covered by tests or explicit verification.
 - The implementation stays within the declared isolation key unless the plan is revised.
 - The targeted verification gate passes.

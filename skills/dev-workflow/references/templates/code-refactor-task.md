@@ -4,10 +4,12 @@
 
 ### Control
 - type: code:refactor
+- stage: implementation
 - agent_role: implementer
 - scheduler: serial
 - isolation_key: global
 - dependencies: []
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: strict
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -18,6 +20,7 @@
 - Coverage: docs/plans/<feature-name>/validation-report.md
 
 ### Steps
+- Confirm every required gate applies to the current story, plan, and validation revisions.
 - Identify the public contracts that must remain stable.
 - Add or confirm tests around existing behavior before changing structure.
 - Refactor one bounded area at a time.
@@ -37,6 +40,7 @@
 - Build: `pnpm build`
 
 ### Done When
+- The refactor stayed inside the approved mutation boundary and used current gate approvals.
 - Public behavior and contracts are preserved or intentionally changed in the plan.
 - Full verification gates pass.
 - Strict review has no blocking findings.

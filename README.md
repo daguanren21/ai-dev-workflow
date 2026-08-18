@@ -10,9 +10,9 @@ An agent harness workflow for AI coding tools, enabling controlled requirement i
 
 | Deliverable | Description |
 |-------------|-------------|
-| **Requirements MCP Server** (`src/`) | MCP server for ONES work items. Routes 需求/任务/缺陷 by `issueType.detailType`. |
+| **Requirements MCP Server** (`src/`) | MCP server for ONES work items. Routes requirements, tasks, and defects by `issueType.detailType`. |
 | **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | Self-contained agent harness skill. Install it to run requirement intake, planning, gated execution, verification, review, and handoff. |
-| **Grill-me Skills** (`skills/grill-me/`, `skills/grilling/`) | Interview loop for open product decisions. Uses `get_grilling_brief`; does not live in the MCP server. |
+| **Grill-me Skills** (`skills/grill-me/`, `skills/grilling/`) | Fact-first interview entry and decision-tree primitive for ambiguous development requests. ONES sources use one `get_grilling_brief` call. |
 
 ---
 
@@ -36,11 +36,11 @@ Once installed, AI coding tools will automatically use the dev-workflow harness 
 
 Codex loads skills from `$CODEX_HOME/skills`. If `CODEX_HOME` is not set, the default is `~/.codex`.
 
-From this repository:
+From this repository, install all three cooperating skills:
 
 ```bash
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
-cp -R skills/dev-workflow/* "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow/"
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/dev-workflow skills/grill-me skills/grilling "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
 For local development, use a symlink instead so Codex picks up edits from this checkout after restart:
@@ -48,6 +48,8 @@ For local development, use a symlink instead so Codex picks up edits from this c
 ```bash
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 ln -s "$(pwd)/skills/dev-workflow" "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+ln -s "$(pwd)/skills/grill-me" "${CODEX_HOME:-$HOME/.codex}/skills/grill-me"
+ln -s "$(pwd)/skills/grilling" "${CODEX_HOME:-$HOME/.codex}/skills/grilling"
 ```
 
 Restart Codex after installing or updating the skill.
@@ -76,12 +78,12 @@ When the harness is active, the agent should announce:
 I'm using the dev-workflow harness to drive this development task.
 ```
 
-By default, the harness generates user stories and an implementation plan before writing code, then pauses for confirmation. You do not need to repeat "write the plan first" in every prompt. Say so only when you want to bypass that gate.
+Requirement-driven work has two non-bypassable approval gates: approve the current user stories before planning, then approve the current implementation plan after coverage validation passes. Mechanical tasks with an obvious bounded result do not need to trigger the full harness.
 
 Expected flow:
 
 ```text
-Intake -> Context Load -> Normalize -> Harness Plan -> Coverage Validation -> Gated Execution -> Verification -> Review -> Handoff
+Context -> Grill -> User Stories -> Stories Approval -> Plan -> Coverage Validation -> Plan Approval -> Execution -> Verification -> Review -> Handoff
 ```
 
 ### 4. Install MCP Server (Optional)
@@ -174,7 +176,7 @@ Requirements are not limited to ONES. Pair with official MCP servers for GitHub 
 A self-contained AI-assisted agent harness skill that governs the full development lifecycle:
 
 ```
-Intake -> Context Load -> Normalize -> Harness Plan -> Coverage Validation -> Gated Execution -> Verification -> Review -> Handoff
+Context -> Grill -> User Stories -> Stories Approval -> Plan -> Coverage Validation -> Plan Approval -> Execution -> Verification -> Review -> Handoff
 ```
 
 The harness follows a feedforward + feedback model: it guides the agent with plans, artifacts, and task boundaries, then uses deterministic gates such as lint, typecheck, build, tests, and review as backpressure before handoff.
@@ -186,6 +188,7 @@ skills/dev-workflow/
 ├── SKILL.md                         # Skill entry (YAML frontmatter + harness definition)
 └── references/
     ├── workflow.md                  # Agent harness lifecycle
+    ├── requirement-validation.md    # Coverage validation gate contract
     ├── task-types.md                # Harness task types, scheduler modes, declaration syntax
     ├── service-transform.md         # Service-layer transform pattern for Mock/API adaptation
     └── templates/                   # Task declaration templates
@@ -204,7 +207,7 @@ skills/dev-workflow/
 ```
 ai-dev-workflow/
 ├── skills/
-│   ├── grill-me/                    # User-invoked grilling entry
+│   ├── grill-me/                    # Ambiguity-resolution entry
 │   ├── grilling/                    # Interview primitive
 │   └── dev-workflow/                # Agent Harness Workflow Skill
 │
@@ -274,7 +277,7 @@ pnpm build
 pnpm test
 
 # Type check
-pnpm lint
+pnpm typecheck
 ```
 
 

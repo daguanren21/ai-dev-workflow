@@ -2,6 +2,8 @@
 
 Task types are scheduling primitives for the agent harness. They define how work may run, what isolation is required, and what review level applies before handoff.
 
+Task type does not grant permission to execute. Lifecycle stage, gate state, dependencies, and mutation boundary must all allow the task to run.
+
 ## Task Types
 
 | Type | ID | Scheduler | Review Level | Harness Use |
@@ -32,10 +34,12 @@ Default `parallel_limit`: 5.
 
 ### Control
 - type: code:dev | code:fix | code:refactor | doc:write | doc:translate | research | data | test
+- stage: discovery | planning | implementation | verification | handoff
 - agent_role: implementer | reviewer | researcher | tester | documenter
 - scheduler: parallel | isolated | serial
 - isolation_key: <module-or-file-path>
 - dependencies: []
+- required_gates: [] | [stories_approved] | [stories_approved, coverage_passed, plan_approved]
 - review_level: light | standard | strict
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -57,13 +61,27 @@ Default `parallel_limit`: 5.
 | Field | Required | Meaning |
 |-------|:---:|---------|
 | `type` | Yes | Work category and default review expectation |
+| `stage` | Yes | Lifecycle phase in which the task is allowed to run |
 | `agent_role` | Yes | Primary role responsible for the task |
 | `scheduler` | Yes | Execution mode: `parallel`, `isolated`, or `serial` |
 | `isolation_key` | Yes for `isolated`, optional for others | Module, file, data source, or shared contract boundary |
 | `dependencies` | Yes | Task IDs that must finish first; use an empty list when none exist |
+| `required_gates` | Yes | Current approvals and validation states required before execution |
 | `review_level` | Yes | `light`, `standard`, or `strict` |
 | `feedback_mode` | Yes | How verification output is exposed to the agent |
 | `retry_limit` | Yes | Maximum repair attempts before human escalation |
+
+## Gate Preconditions
+
+| Task Stage | Default Required Gates | Mutation Rule |
+|------------|------------------------|---------------|
+| `discovery` | `[]` | Read-only fact gathering only; source mutations are forbidden |
+| `planning` | `[stories_approved]` | May write planning artifacts, not implementation artifacts |
+| `implementation` | `[stories_approved, coverage_passed, plan_approved]` | May mutate only the approved task boundary |
+| `verification` | `[stories_approved, coverage_passed, plan_approved]` | Test-file writes require plan authorization; check execution is read-only |
+| `handoff` | `[stories_approved, coverage_passed, plan_approved]` | May write only declared handoff artifacts |
+
+Gate state is revision-bound. If an upstream artifact changes, affected tasks return to blocked even when an older approval exists.
 
 ## Review Levels
 
@@ -92,17 +110,19 @@ Verification output should act as backpressure:
 
 ### Control
 - type: doc:write
+- stage: implementation
 - agent_role: documenter
 - scheduler: parallel
 - isolation_key: docs/readme
 - dependencies: []
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: light
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
 
 ### Inputs
 - Requirement: US-DOC-1
-- Context: docs/plans/harness/requirements.md
+- Context: docs/plans/harness/user-stories.md
 
 ### Outputs
 - Artifact: README.md
@@ -119,10 +139,12 @@ Verification output should act as backpressure:
 
 ### Control
 - type: code:dev
+- stage: implementation
 - agent_role: implementer
 - scheduler: isolated
 - isolation_key: src/tools/search-requirements.ts
 - dependencies: [HT-PLAN-1]
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: strict
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -146,10 +168,12 @@ Verification output should act as backpressure:
 
 ### Control
 - type: code:refactor
+- stage: implementation
 - agent_role: implementer
 - scheduler: serial
 - isolation_key: global
 - dependencies: [HT-COVERAGE-1]
+- required_gates: [stories_approved, coverage_passed, plan_approved]
 - review_level: strict
 - feedback_mode: quiet_success | actionable_failure
 - retry_limit: 2
@@ -168,6 +192,8 @@ Verification output should act as backpressure:
 
 ## Failure Handling
 
+- If a required gate is missing or stale, keep the task blocked and return to the earliest invalidated phase.
+- If execution requires a mutation outside the approved boundary, stop and revise the plan before writing.
 - If a `parallel` task conflicts with another task, stop both tasks and reclassify the boundary as `isolated`.
 - If an `isolated` task conflicts within the same key, serialize that key and continue other keys.
 - If a `serial` task fails, stop the harness and resolve the failure before scheduling more work.

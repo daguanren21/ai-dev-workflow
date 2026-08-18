@@ -12,7 +12,7 @@
 |-------|------|
 | **Requirements MCP Server** (`src/`) | 需求获取 MCP 服务。按 `issueType.detailType` 区分需求 / 任务 / 缺陷。 |
 | **Agent Harness Workflow Skill** (`skills/dev-workflow/`) | 自包含的 AI agent harness 工作流 Skill，安装后即可跑通需求接入、计划、门禁执行、验证、审查和交付。 |
-| **Grill-me Skills** (`skills/grill-me/`, `skills/grilling/`) | 开工前访谈循环。先调 `get_grilling_brief`；访谈本身不进 MCP Server。 |
+| **Grill-me Skills** (`skills/grill-me/`, `skills/grilling/`) | 面向模糊开发需求的事实优先访谈入口和决策树原语；ONES 来源只调用一次 `get_grilling_brief`。 |
 
 ---
 
@@ -36,11 +36,11 @@ npx skills add daguanren21/ai-dev-workflow -a claude-code
 
 Codex 从 `$CODEX_HOME/skills` 加载 skills。未设置 `CODEX_HOME` 时，默认目录是 `~/.codex`。
 
-从当前仓库安装：
+从当前仓库安装三个配套 skill：
 
 ```bash
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
-cp -R skills/dev-workflow/* "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow/"
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R skills/dev-workflow skills/grill-me skills/grilling "${CODEX_HOME:-$HOME/.codex}/skills/"
 ```
 
 如果是在本地开发这个 skill，建议使用软链接，这样更新当前仓库后重启 Codex 即可生效：
@@ -48,6 +48,8 @@ cp -R skills/dev-workflow/* "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow/"
 ```bash
 mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
 ln -s "$(pwd)/skills/dev-workflow" "${CODEX_HOME:-$HOME/.codex}/skills/dev-workflow"
+ln -s "$(pwd)/skills/grill-me" "${CODEX_HOME:-$HOME/.codex}/skills/grill-me"
+ln -s "$(pwd)/skills/grilling" "${CODEX_HOME:-$HOME/.codex}/skills/grilling"
 ```
 
 安装或更新后需要重启 Codex。
@@ -76,12 +78,12 @@ Harness 生效时，agent 应该先声明：
 I'm using the dev-workflow harness to drive this development task.
 ```
 
-默认情况下，harness 会先生成 user stories 和 implementation plan，然后暂停等待确认，再开始写代码。你不需要每次重复“先写计划再实现”。只有想跳过这个门禁时，才需要明确说明。
+需求驱动开发包含两个不可跳过的确认门禁：先确认当前 user stories，再生成 implementation plan；覆盖校验通过后，再确认当前 plan 才能开始实现。结果明确且范围很小的机械任务不需要触发完整 harness。
 
 预期流程：
 
 ```text
-需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
+上下文 → Grill → User Stories → Stories 确认 → Plan → 覆盖校验 → Plan 确认 → 实现 → 验证 → 审查 → 交付
 ```
 
 ### 4. 安装 MCP Server（可选）
@@ -174,7 +176,7 @@ npm install -g ai-dev-requirements
 自包含的 AI 辅助 agent harness 工作流 Skill，安装后自动管控完整开发生命周期：
 
 ```
-需求接入 → 上下文加载 → 需求规范化 → Harness 计划 → 覆盖校验 → 门禁执行 → 验证 → 审查 → 交付
+上下文 → Grill → User Stories → Stories 确认 → Plan → 覆盖校验 → Plan 确认 → 实现 → 验证 → 审查 → 交付
 ```
 
 这个 harness 遵循“前馈 + 反馈”模型：先用计划、产物和任务边界引导 agent，再用 lint、typecheck、build、tests、review 等确定性门禁形成反压，合格后再交付。
@@ -186,6 +188,7 @@ skills/dev-workflow/
 ├── SKILL.md                         # Skill 入口（YAML frontmatter + harness 定义）
 └── references/
     ├── workflow.md                  # Agent harness 生命周期
+    ├── requirement-validation.md    # 覆盖校验门禁规范
     ├── task-types.md                # Harness 任务类型、调度模式、声明语法
     ├── service-transform.md         # Service 层 Transform 适配模式
     └── templates/                   # 任务声明模板
@@ -204,7 +207,7 @@ skills/dev-workflow/
 ```
 ai-dev-workflow/
 ├── skills/
-│   ├── grill-me/                    # 用户入口
+│   ├── grill-me/                    # 模糊需求处理入口
 │   ├── grilling/                    # 访谈原语
 │   └── dev-workflow/                # Agent Harness Workflow Skill
 ├── src/                             # Requirements MCP Server 源码
@@ -273,7 +276,7 @@ pnpm build
 pnpm test
 
 # 类型检查
-pnpm lint
+pnpm typecheck
 ```
 
 
