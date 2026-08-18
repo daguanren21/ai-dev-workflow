@@ -11,5 +11,5 @@ allowBuilds:
 overrides:
   'brace-expansion@>=4.0.0 <5.0.9': 5.0.9
   'flatted@<=3.4.1': 3.4.4
-  'nanoid@<3.3.18': 3.3.18
+  'nanoid@<3.3.18': 6.0.1
   'postcss@<=8.5.22': 8.5.26
