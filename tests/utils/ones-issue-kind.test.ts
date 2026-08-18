@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyOnesWorkItem, workItemKindLabel } from '../../src/utils/ones-issue-kind.js'
+import { classifyOnesWorkItem, workItemKindLabel } from '../../src/utils/ones-issue-kind'
 
 describe('classifyOnesWorkItem', () => {
   it('classifies by detailType first', () => {

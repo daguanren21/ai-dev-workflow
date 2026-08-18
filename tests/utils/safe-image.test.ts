@@ -1,6 +1,6 @@
-import type { RemoteImageTrust } from '../../src/utils/safe-image.js'
+import type { RemoteImageTrust } from '../../src/utils/safe-image'
 import { describe, expect, it, vi } from 'vitest'
-import { downloadTrustedImage, downloadTrustedImages } from '../../src/utils/safe-image.js'
+import { downloadTrustedImage, downloadTrustedImages } from '../../src/utils/safe-image'
 
 const PNG_BYTES = new Uint8Array([
   0x89,

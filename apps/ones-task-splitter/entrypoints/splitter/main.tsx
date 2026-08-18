@@ -2,8 +2,8 @@ import type { DraftDocument, DraftTask } from '@ai-dev-workflow/task-splitter-co
 import { parseTaskDocument } from '@ai-dev-workflow/task-splitter-core'
 import { StrictMode, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { requestCreateTasks } from '../../src/lib/messages.js'
-import { saveDraft } from '../../src/lib/storage.js'
+import { requestCreateTasks } from '../../src/lib/messages'
+import { saveDraft } from '../../src/lib/storage'
 import '../../src/styles.css'
 
 const FORMAT_EXAMPLE = `REQ-100001 【优化】需求标题

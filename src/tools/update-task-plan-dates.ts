@@ -1,5 +1,5 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { UpdateTaskPlanDatesResult } from '../types/requirement.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { UpdateTaskPlanDatesResult } from '../types/requirement'
 import { z } from 'zod/v4'
 
 const DateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')

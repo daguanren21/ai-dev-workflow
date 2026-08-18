@@ -1,6 +1,6 @@
 import type { DraftDocument } from '@ai-dev-workflow/task-splitter-core'
 import { defineBackground } from 'wxt/utils/define-background'
-import { createTaskTree } from '../src/ones/create-tasks.js'
+import { createTaskTree } from '../src/ones/create-tasks'
 
 interface CreateResult { document: DraftDocument, status: 'created' | 'reauth-required' | 'partial-failure', created: string[], failed: string[] }
 

@@ -1,10 +1,10 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { Requirement } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { Requirement } from '../../src/types/requirement'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import { describe, expect, it, vi } from 'vitest'
 import packageJson from '../../packages/ai-dev-requirements/package.json' with { type: 'json' }
-import { createRequirementsServer } from '../../src/server.js'
+import { createRequirementsServer } from '../../src/server'
 
 const emptyConfig = {
   config: { sources: {} },
@@ -72,10 +72,25 @@ describe('requirements MCP contract', () => {
       const names = result.tools.map(tool => tool.name)
 
       expect(names).toContain('get_work_item')
+      expect(names).toContain('list_pending_work_items')
+      expect(names).toContain('inspect_requirement_decomposition')
+      expect(names).toContain('prepare_requirement_decomposition')
+      expect(names).toContain('apply_requirement_decomposition')
       expect(names).not.toContain('get_requirement')
 
       const brief = result.tools.find(tool => tool.name === 'get_grilling_brief')
+      const pendingWorkItems = result.tools.find(tool => tool.name === 'list_pending_work_items')
       const planDates = result.tools.find(tool => tool.name === 'update_task_plan_dates')
+      const inspectDecomposition = result.tools.find(tool => tool.name === 'inspect_requirement_decomposition')
+      const prepareDecomposition = result.tools.find(tool => tool.name === 'prepare_requirement_decomposition')
+      const applyDecomposition = result.tools.find(tool => tool.name === 'apply_requirement_decomposition')
+      expect(inspectDecomposition?.annotations?.readOnlyHint).toBe(true)
+      expect(pendingWorkItems?.annotations?.readOnlyHint).toBe(true)
+      expect(prepareDecomposition?.annotations?.readOnlyHint).toBe(true)
+      expect(applyDecomposition?.annotations).toMatchObject({
+        readOnlyHint: false,
+        idempotentHint: false,
+      })
       expect(planDates?.annotations).toMatchObject({
         readOnlyHint: false,
         destructiveHint: true,
@@ -122,6 +137,17 @@ describe('requirements MCP contract', () => {
       const sources = await client.callTool({ name: 'list_sources', arguments: {} })
       expect(JSON.stringify(sources)).toContain('configured')
       expect(JSON.stringify(sources)).not.toContain('API Base')
+
+      const disabledWrite = await client.callTool({
+        name: 'apply_requirement_decomposition',
+        arguments: {
+          approvalToken: 'not-an-approval',
+          planHash: 'a'.repeat(64),
+          confirmed: true,
+        },
+      })
+      expect(disabledWrite.isError).toBe(true)
+      expect(JSON.stringify(disabledWrite)).toContain('writes are disabled')
 
       const failed = await client.callTool({
         name: 'get_issue_detail',

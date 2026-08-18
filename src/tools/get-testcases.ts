@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { TestCaseResult } from '../types/requirement.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { TestCaseResult } from '../types/requirement'
 import { z } from 'zod/v4'
-import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content'
 
 export const GetTestcasesSchema = z.object({
   taskNumber: z.string().describe('Task number (e.g. "302" or "#302"). Finds all testcases in the matching module.'),

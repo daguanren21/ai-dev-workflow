@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { IssueDetail, Requirement } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { IssueDetail, Requirement } from '../../src/types/requirement'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildGrillingBrief, handleGetGrillingBrief } from '../../src/tools/get-grilling-brief.js'
+import { buildGrillingBrief, handleGetGrillingBrief } from '../../src/tools/get-grilling-brief'
 
 const baseRequirement: Requirement = {
   id: 'TEST-001',

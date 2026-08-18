@@ -1,13 +1,14 @@
-import type { SourceConfig } from '../types/config.js'
-import type { AddManhourResult, Attachment, IssueDetail, RelatedIssue, Requirement, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep, UpdateTaskPlanDatesResult } from '../types/requirement.js'
+import type { SourceConfig } from '../types/config'
+import type { AddManhourResult, ApplyRequirementDecompositionResult, Attachment, IssueDetail, PendingWorkItem, PendingWorkItemsResult, RelatedIssue, Requirement, RequirementDecompositionContext, RequirementDecompositionTask, SearchResult, SourceType, TestCase, TestCaseResult, TestCaseStep, UpdateTaskPlanDatesResult } from '../types/requirement'
 
-import type { OnesWorkItemKind } from '../utils/ones-issue-kind.js'
-import type { RemoteImageTrust } from '../utils/safe-image.js'
-import type { AddManhourParams, GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams, UpdateTaskPlanDatesParams } from './base.js'
+import type { OnesWorkItemKind } from '../utils/ones-issue-kind'
+import type { RemoteImageTrust } from '../utils/safe-image'
+import type { AddManhourParams, CreateRequirementDecompositionParams, GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementDecompositionContextParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams, UpdateTaskPlanDatesParams } from './base'
 import crypto from 'node:crypto'
-import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status.js'
-import { classifyOnesWorkItem, workItemKindLabel } from '../utils/ones-issue-kind.js'
-import { BaseAdapter } from './base.js'
+import { mapOnesPriority, mapOnesStatus, mapOnesType } from '../utils/map-status'
+import { classifyOnesWorkItem, workItemKindLabel } from '../utils/ones-issue-kind'
+import { buildRequirementDecompositionBaseline, sortRequirementTasks } from '../utils/requirement-decomposition'
+import { BaseAdapter } from './base'
 
 // ============ ONES GraphQL types ============
 
@@ -25,7 +26,7 @@ interface OnesTaskNode {
   subIssueType?: { uuid: string, name: string, detailType?: number } | null
   assign?: { uuid: string, name: string } | null
   owner?: { uuid: string, name: string } | null
-  project?: { uuid: string, name: string }
+  project?: { uuid: string, name: string, identifier?: string }
   parent?: { uuid: string, number?: number, issueType?: { uuid: string, name: string } } | null
   relatedTasks?: OnesRelatedTask[]
   relatedWikiPages?: OnesWikiPage[]
@@ -49,10 +50,15 @@ interface OnesWikiPage {
 }
 
 interface OnesRelatedTask {
+  key?: string
   uuid: string
   number: number
   name: string
-  issueType: { uuid: string, name: string }
+  description?: string
+  descriptionText?: string
+  desc_rich?: string
+  issueType: { uuid: string, name: string, detailType?: number }
+  subIssueType?: { uuid: string, name: string, detailType?: number } | null
   status: { uuid: string, name: string, category?: string }
   assign?: { uuid: string, name: string } | null
 }
@@ -204,8 +210,12 @@ const TASK_DETAIL_QUERY = `
       project { uuid name }
       parent { uuid number issueType { uuid name } }
       relatedTasks {
-        uuid number name
+        key uuid number name
+        description
+        descriptionText
+        desc_rich: description
         issueType { uuid name }
+        subIssueType { uuid name detailType }
         status { uuid name category }
         assign { uuid name }
       }
@@ -253,7 +263,8 @@ const SEARCH_TASKS_QUERY = `
         status { uuid name category }
         priority { value }
         assign { uuid name }
-        project { uuid name }
+        project { uuid name identifier }
+        parent { uuid number issueType { uuid name } }
       }
     }
   }
@@ -591,13 +602,13 @@ function extractWikiPageUuidsFromText(text: string, apiBase: string): string[] {
   }
 
   for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
-    const start = match.index
+    const start = match.index!
     absoluteRanges.push({ start, end: start + match[0].length })
     collect(match[0])
   }
 
   for (const match of text.matchAll(/\/wiki(?:\/|(?=[#?]))[^\s<>"']+/gi)) {
-    const start = match.index
+    const start = match.index!
     if (absoluteRanges.some(range => start >= range.start && start < range.end))
       continue
     collect(match[0])
@@ -782,6 +793,142 @@ function htmlToPlainText(html: string): string {
 function getTaskDetailText(task: OnesTaskNode): string {
   return task.descriptionText?.trim()
     || htmlToPlainText(task.desc_rich ?? task.description ?? '')
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim())
+      return value.trim()
+    if (typeof value === 'number' && Number.isFinite(value))
+      return String(value)
+  }
+  return null
+}
+
+function taskInfoFieldValue(record: Record<string, unknown>, fieldUuid: string): string | null {
+  const direct = record[fieldUuid]
+  if (typeof direct === 'string' && direct.trim())
+    return direct.trim()
+
+  const collections = [record.field_values, record.fieldValues, record.fields]
+  for (const collection of collections) {
+    if (Array.isArray(collection)) {
+      for (const entry of collection) {
+        if (!isRecord(entry))
+          continue
+        const uuid = firstString(entry, ['field_uuid', 'fieldUuid', 'uuid'])
+        if (uuid !== fieldUuid)
+          continue
+        const value = firstString(entry, ['date_value', 'dateValue', 'value', 'field_value', 'fieldValue'])
+        if (value)
+          return value
+      }
+    }
+    else if (isRecord(collection)) {
+      const entry = collection[fieldUuid]
+      if (typeof entry === 'string' && entry.trim())
+        return entry.trim()
+      if (isRecord(entry)) {
+        const value = firstString(entry, ['date_value', 'dateValue', 'value', 'field_value', 'fieldValue'])
+        if (value)
+          return value
+      }
+    }
+  }
+
+  return null
+}
+
+function taskInfoDate(record: Record<string, unknown>, kind: 'start' | 'end'): string | null {
+  let value: string | null
+  if (kind === 'start') {
+    value = firstString(record, ['planStartDate', 'plan_start_date', 'plan_start'])
+      ?? taskInfoFieldValue(record, 'field027')
+  }
+  else {
+    value = firstString(record, ['planEndDate', 'plan_end_date', 'plan_end'])
+      ?? taskInfoFieldValue(record, 'field028')
+  }
+
+  if (!value)
+    return null
+  if (isValidOnesDate(value))
+    return value
+
+  const unixSeconds = Number(value)
+  if (!Number.isFinite(unixSeconds) || unixSeconds <= 0)
+    return null
+  return new Date(unixSeconds * 1000).toISOString().slice(0, 10)
+}
+
+const ONES_MANHOUR_UNITS_PER_HOUR = 100000
+
+function taskInfoHours(record: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
+      continue
+    return value / ONES_MANHOUR_UNITS_PER_HOUR
+  }
+  return null
+}
+
+function inferredParentDisplayId(task: OnesTaskNode, info: Record<string, unknown>): string | null {
+  const explicit = firstString(info, ['parent_display_id', 'parentDisplayId'])
+  if (explicit)
+    return explicit
+
+  const match = task.name.trim().match(/^([A-Z][A-Z0-9]*-\d+)\b/i)
+  return match?.[1]?.toUpperCase() ?? null
+}
+
+function compareNullableDate(left: string | null, right: string | null): number {
+  if (left === right)
+    return 0
+  if (left === null)
+    return 1
+  if (right === null)
+    return -1
+  return left.localeCompare(right)
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = []
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      results[index] = await mapper(items[index]!, index)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
+function taskInfoDetail(record: Record<string, unknown>, fallback: OnesRelatedTask): string {
+  const text = firstString(record, ['descriptionText', 'description_text'])
+  if (text)
+    return text
+
+  const rich = firstString(record, ['desc_rich', 'description', 'desc'])
+  return rich ? htmlToPlainText(rich) : getTaskDetailText(fallback as OnesTaskNode)
+}
+
+function taskDisplayId(
+  info: Record<string, unknown>,
+  task: Pick<OnesRelatedTask, 'number'>,
+  fallbackIdentifier: string | null,
+): string {
+  const explicit = firstString(info, ['displayId', 'display_id'])
+  if (explicit)
+    return explicit
+  return fallbackIdentifier ? `${fallbackIdentifier}-${task.number}` : `#${task.number}`
 }
 
 interface HtmlImageReference {
@@ -2285,7 +2432,10 @@ export class OnesAdapter extends BaseAdapter {
         orderBy: { position: 'ASC', createTime: 'DESC' },
         filterGroup: [filter],
         search: null,
-        pagination: { limit: pageSize * page, preciseCount: false },
+        // "all tasks" is filtered locally by work-item kind and status category.
+        // Fetch the server-side safety cap first so requirements, defects, and
+        // completed tasks near the front cannot hide later pending tasks.
+        pagination: { limit: intent === 'all_tasks' ? 1000 : pageSize * page, preciseCount: false },
         limit: 1000,
       },
       'group-task-data',
@@ -2302,9 +2452,9 @@ export class OnesAdapter extends BaseAdapter {
 
     if (intent === 'all_tasks') {
       // Requirements are intentionally excluded from the “my tasks” entry.
-      tasks = tasks.filter(
-        task => classifyOnesWorkItem(task.issueType, task.subIssueType) === 'task',
-      )
+      tasks = tasks
+        .filter(task => classifyOnesWorkItem(task.issueType, task.subIssueType) === 'task')
+        .filter(task => task.status?.category === 'to_do' || task.status?.category === 'in_progress')
     }
 
     if (assigneeUuid) {
@@ -2336,6 +2486,181 @@ export class OnesAdapter extends BaseAdapter {
       page,
       pageSize,
     }
+  }
+
+  async listPendingWorkItems(): Promise<PendingWorkItemsResult> {
+    const data = await this.graphql<{
+      data?: {
+        buckets?: Array<{
+          key: string
+          tasks?: OnesTaskNode[]
+        }>
+      }
+    }>(
+      SEARCH_TASKS_QUERY,
+      {
+        groupBy: { tasks: {} },
+        groupOrderBy: null,
+        orderBy: { position: 'ASC', createTime: 'DESC' },
+        filterGroup: [{
+          assign_in: ['${currentUser}'],
+          status_notIn: DEFAULT_STATUS_NOT_IN,
+        }],
+        search: null,
+        pagination: { limit: 1000, preciseCount: false },
+        limit: 1000,
+      },
+      'group-task-data',
+    )
+
+    const tasks = (data.data?.buckets?.flatMap(bucket => bucket.tasks ?? []) ?? [])
+      .filter(task => task.status?.category === 'to_do' || task.status?.category === 'in_progress')
+      .filter((task) => {
+        const kind = classifyOnesWorkItem(task.issueType, task.subIssueType)
+        return kind === 'requirement' || kind === 'task'
+      })
+
+    const items = await mapWithConcurrency(tasks, 6, async (task): Promise<PendingWorkItem> => {
+      const info = await this.fetchTaskInfo(task.uuid)
+      const partial = Object.keys(info).length === 0
+      const kind = classifyOnesWorkItem(task.issueType, task.subIssueType)
+      const statusCategory = task.status.category === 'in_progress' ? 'in_progress' : 'to_do'
+      const fallbackIdentifier = task.project?.identifier?.toUpperCase() ?? null
+
+      return {
+        uuid: task.uuid,
+        displayId: taskDisplayId(info, task, fallbackIdentifier),
+        kind: kind === 'requirement' ? 'requirement' : 'task',
+        title: firstString(info, ['summary', 'name']) ?? task.name,
+        statusName: task.status.name,
+        statusCategory,
+        assigneeName: task.assign?.name ?? null,
+        projectName: task.project?.name ?? null,
+        parentUuid: firstString(info, ['parent_uuid', 'parentUuid']) ?? task.parent?.uuid ?? null,
+        parentDisplayId: kind === 'task' ? inferredParentDisplayId(task, info) : null,
+        actualHours: taskInfoHours(info, ['total_manhour', 'totalManhour', 'actual_manhour']),
+        remainingHours: taskInfoHours(info, ['remaining_manhour', 'remainingManhour']),
+        estimatedHours: taskInfoHours(info, ['assess_manhour', 'assessManhour', 'estimated_manhour']),
+        planStartDate: taskInfoDate(info, 'start'),
+        planEndDate: taskInfoDate(info, 'end'),
+        partial,
+        warnings: partial ? ['ONES task detail GET returned no data'] : [],
+      }
+    })
+
+    items.sort((left, right) => (
+      compareNullableDate(left.planStartDate, right.planStartDate)
+      || compareNullableDate(left.planEndDate, right.planEndDate)
+      || left.displayId.localeCompare(right.displayId)
+    ))
+
+    return {
+      items,
+      total: items.length,
+      partialCount: items.filter(item => item.partial).length,
+      fetchedAt: new Date().toISOString(),
+    }
+  }
+
+  async getRequirementDecompositionContext(
+    params: GetRequirementDecompositionContextParams,
+  ): Promise<RequirementDecompositionContext> {
+    const workItem = await this.getRequirement({ id: params.requirementId })
+    if (workItem.raw.workItemKind !== 'requirement') {
+      const kind = typeof workItem.raw.workItemKind === 'string'
+        ? workItem.raw.workItemKind
+        : workItem.type
+      throw new Error(
+        `ONES: "${params.requirementId}" is ${kind}, not a requirement. Only requirements can be decomposed.`,
+      )
+    }
+
+    const raw = workItem.raw as unknown as OnesTaskNode & Record<string, unknown>
+    if (!Number.isInteger(raw.number)) {
+      throw new TypeError('ONES: Standalone wiki pages cannot be decomposed into requirement tasks')
+    }
+
+    const parsedDisplayId = parseDisplayId(params.requirementId)
+    const requirementInfo = await this.fetchTaskInfo(workItem.id)
+    const projectIdentifier = parsedDisplayId?.identifier.toUpperCase()
+      ?? firstString(requirementInfo, ['projectIdentifier', 'project_identifier'])
+    const displayId = firstString(requirementInfo, ['displayId', 'display_id'])
+      ?? (projectIdentifier ? `${projectIdentifier}-${raw.number}` : `#${raw.number}`)
+
+    // ONES returns all directly related work items here. Filtering to the task
+    // kind is deliberately fail-safe: defects never count as decomposition,
+    // while any existing related task prevents accidental duplicate creation.
+    const relatedTasks = (raw.relatedTasks ?? [])
+      .filter(task => classifyOnesWorkItem(task.issueType, task.subIssueType) === 'task')
+    const relatedInfos = await Promise.all(
+      relatedTasks.map(task => this.fetchTaskInfo(task.uuid)),
+    )
+
+    const tasks = sortRequirementTasks(relatedTasks.map((task, index): RequirementDecompositionTask => {
+      const info = relatedInfos[index] ?? {}
+      const statusCategory = task.status?.category ?? 'unknown'
+      return {
+        uuid: task.uuid,
+        displayId: taskDisplayId(info, task, projectIdentifier),
+        name: task.name,
+        detail: taskInfoDetail(info, task),
+        statusName: task.status?.name ?? 'Unknown',
+        statusCategory,
+        pending: statusCategory === 'to_do' || statusCategory === 'in_progress',
+        assigneeName: task.assign?.name ?? null,
+        assigneeUuid: task.assign?.uuid ?? null,
+        planStartDate: taskInfoDate(info, 'start'),
+        planEndDate: taskInfoDate(info, 'end'),
+      }
+    }))
+
+    const requirement = {
+      workItemKind: 'requirement' as const,
+      uuid: workItem.id,
+      displayId,
+      name: raw.name ?? workItem.title,
+      detail: typeof workItem.raw.sourceDescription === 'string'
+        ? workItem.raw.sourceDescription
+        : workItem.description,
+      issueTypeName: raw.subIssueType?.name ?? raw.issueType?.name ?? '需求',
+      statusName: raw.status?.name ?? workItem.status,
+      statusCategory: raw.status?.category ?? workItem.status,
+      projectUuid: raw.project?.uuid ?? null,
+      projectName: raw.project?.name ?? null,
+      assigneeUuid: raw.assign?.uuid ?? null,
+      assigneeName: raw.assign?.name ?? workItem.assignee,
+    }
+    const baseline = buildRequirementDecompositionBaseline(requirement, tasks, {
+      version: firstString(requirementInfo, ['version', 'version_uuid', 'versionUuid']),
+      updatedAt: firstString(requirementInfo, ['updatedAt', 'updated_at', 'updateTime', 'update_time']),
+    })
+
+    return {
+      // The confirmed read contract currently exposes related work items, but
+      // not the relationship UUID/type. Keep candidates visible for diagnosis
+      // while preventing prepare/apply from treating them as verified
+      // "requirement decomposition" tasks.
+      decompositionRelation: {
+        verified: false,
+        uuid: null,
+        name: null,
+      },
+      requirement,
+      tasks,
+      pendingTasks: tasks.filter(task => task.pending),
+      baseline,
+    }
+  }
+
+  async createRequirementDecomposition(
+    _params: CreateRequirementDecompositionParams,
+  ): Promise<ApplyRequirementDecompositionResult> {
+    // The production request contract has not been confirmed without issuing a
+    // mutation. Refuse before login/network access instead of guessing an URL or
+    // payload. Tests may inject a mock adapter implementing this method.
+    throw new Error(
+      'ONES: Requirement task creation is unavailable because the production create/relationship API contract has not been confirmed. No write request was sent.',
+    )
   }
 
   async addManhour(params: AddManhourParams): Promise<AddManhourResult> {

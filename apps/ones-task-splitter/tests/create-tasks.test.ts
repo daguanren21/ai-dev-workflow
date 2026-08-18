@@ -1,6 +1,6 @@
 import { parseTaskDocument } from '@ai-dev-workflow/task-splitter-core'
 import { describe, expect, it } from 'vitest'
-import { createTaskTree } from '../src/ones/create-tasks.js'
+import { createTaskTree } from '../src/ones/create-tasks'
 
 describe('createTaskTree', () => {
   it('creates parents before children and skips persisted ids on retry', async () => {

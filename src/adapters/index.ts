@@ -1,7 +1,7 @@
-import type { SourceConfig } from '../types/config.js'
-import type { SourceType } from '../types/requirement.js'
-import type { BaseAdapter } from './base.js'
-import { OnesAdapter } from './ones.js'
+import type { SourceConfig } from '../types/config'
+import type { SourceType } from '../types/requirement'
+import type { BaseAdapter } from './base'
+import { OnesAdapter } from './ones'
 
 const ADAPTER_MAP: Record<string, new (
   sourceType: SourceType,
@@ -28,5 +28,5 @@ export function createAdapter(
   return new AdapterClass(sourceType, config, resolvedAuth)
 }
 
-export { BaseAdapter } from './base.js'
-export { OnesAdapter } from './ones.js'
+export { BaseAdapter } from './base'
+export { OnesAdapter } from './ones'

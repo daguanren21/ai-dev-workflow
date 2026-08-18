@@ -1,5 +1,5 @@
-import type { AuthConfig } from './auth.js'
-import type { SourceType } from './requirement.js'
+import type { AuthConfig } from './auth'
+import type { SourceType } from './requirement'
 
 export interface SourceConfig {
   enabled: boolean

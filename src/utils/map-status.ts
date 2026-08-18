@@ -1,4 +1,4 @@
-import type { RequirementPriority, RequirementStatus, RequirementType } from '../types/requirement.js'
+import type { RequirementPriority, RequirementStatus, RequirementType } from '../types/requirement'
 
 // --- ONES status mapping ---
 const ONES_STATUS_MAP: Record<string, RequirementStatus> = {

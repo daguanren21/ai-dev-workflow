@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { IssueDetail } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { IssueDetail } from '../../src/types/requirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleGetIssueDetail } from '../../src/tools/get-issue-detail.js'
+import { handleGetIssueDetail } from '../../src/tools/get-issue-detail'
 
 const mockDetail: IssueDetail = {
   key: 'task-mock-issue-uuid',

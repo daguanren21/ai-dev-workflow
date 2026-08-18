@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { AddManhourResult } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { AddManhourResult } from '../../src/types/requirement'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleAddManhour } from '../../src/tools/add-manhour.js'
+import { handleAddManhour } from '../../src/tools/add-manhour'
 
 const mockResult: AddManhourResult = {
   key: 'manhour-demo-key',

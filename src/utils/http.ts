@@ -1,5 +1,5 @@
-import type { AuthConfig } from '../types/auth.js'
-import type { SourceConfig } from '../types/config.js'
+import type { AuthConfig } from '../types/auth'
+import type { SourceConfig } from '../types/config'
 
 export interface FetchOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'

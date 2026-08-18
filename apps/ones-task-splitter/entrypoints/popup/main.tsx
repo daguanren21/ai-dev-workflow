@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { requestSessionStatus } from '../../src/lib/messages.js'
-import { listDrafts } from '../../src/lib/storage.js'
+import { requestSessionStatus } from '../../src/lib/messages'
+import { listDrafts } from '../../src/lib/storage'
 import '../../src/styles.css'
 
 function PopupApp() {

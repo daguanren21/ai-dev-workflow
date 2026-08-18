@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OnesAdapter } from '../../src/adapters/ones.js'
+import { OnesAdapter } from '../../src/adapters/ones'
 import onesFixture from '../fixtures/ones-response.json'
 
 // Mock global fetch for ONES PKCE flow + GraphQL calls
@@ -7,18 +7,22 @@ const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
 // Mock crypto for deterministic PKCE values
-vi.mock('node:crypto', () => ({
-  default: {
-    publicEncrypt: vi.fn(() => Buffer.from('encrypted-password')),
-    randomBytes: vi.fn(() => Buffer.from('a'.repeat(32))),
-    createHash: vi.fn(() => ({
-      update: vi.fn(() => ({
-        digest: vi.fn(() => Buffer.from('challenge-hash')),
+vi.mock('node:crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:crypto')>()
+  return {
+    ...actual,
+    default: {
+      publicEncrypt: vi.fn(() => Buffer.from('encrypted-password')),
+      randomBytes: vi.fn(() => Buffer.from('a'.repeat(32))),
+      createHash: vi.fn(() => ({
+        update: vi.fn(() => ({
+          digest: vi.fn(() => Buffer.from('challenge-hash')),
+        })),
       })),
-    })),
-    constants: { RSA_PKCS1_PADDING: 1 },
-  },
-}))
+      constants: { RSA_PKCS1_PADDING: 1 },
+    },
+  }
+})
 
 function mockLoginFlow(options: { authorizeLocation?: string, directCode?: boolean } = {}) {
   // 1. encryption_cert
@@ -899,7 +903,26 @@ describe('onesAdapter', () => {
       mockLoginFlow()
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(onesFixture.searchMine),
+        json: () => Promise.resolve({
+          ...onesFixture.searchMine,
+          data: {
+            buckets: [{
+              ...onesFixture.searchMine.data.buckets[0],
+              tasks: [
+                ...onesFixture.searchMine.data.buckets[0].tasks,
+                {
+                  key: 'task-done-005',
+                  uuid: 'task-done-005',
+                  number: 105,
+                  name: '已经完成的任务',
+                  issueType: { uuid: 'it-task', name: '任务' },
+                  status: { uuid: 's-done', name: '已完成', category: 'done' },
+                  assign: { uuid: 'current-user-uuid', name: '当前用户' },
+                },
+              ],
+            }],
+          },
+        }),
       })
 
       const result = await adapter.searchRequirements({ query: '查询我所有任务' })
@@ -1097,6 +1120,268 @@ describe('onesAdapter', () => {
 
       expect(result.items).toHaveLength(2)
       expect(result.total).toBe(2)
+    })
+  })
+
+  describe('listPendingWorkItems', () => {
+    it('enriches current-user requirements and tasks with hours and plan dates', async () => {
+      mockLoginFlow()
+      mockTaskSearch([
+        makeRequirementTask({
+          uuid: 'task-progress',
+          number: 2002,
+          name: 'DEMO-1001 实现查询',
+          issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+          status: { uuid: 's-progress', name: '进行中', category: 'in_progress' },
+          project: { uuid: 'project-demo', name: 'Anonymous Project', identifier: 'DEMO' },
+          parent: { uuid: 'req-parent', number: 1001, issueType: { uuid: 'it-requirement', name: '需求' } },
+        }),
+        makeRequirementTask({
+          uuid: 'req-todo',
+          number: 1001,
+          name: '报表需求',
+          issueType: { uuid: 'it-requirement', name: '需求', detailType: 1 },
+          status: { uuid: 's-todo', name: '未开始', category: 'to_do' },
+          project: { uuid: 'project-demo', name: 'Anonymous Project', identifier: 'DEMO' },
+        }),
+        makeRequirementTask({
+          uuid: 'defect-todo',
+          issueType: { uuid: 'it-defect', name: '缺陷', detailType: 3 },
+          status: { uuid: 's-todo', name: '待处理', category: 'to_do' },
+        }),
+      ])
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          display_id: 'DEMO-2002',
+          summary: 'DEMO-1001 实现查询',
+          parent_uuid: 'req-parent',
+          assess_manhour: 1200000,
+          total_manhour: 700000,
+          remaining_manhour: 500000,
+          field_values: [
+            { field_uuid: 'field027', value: 1787673600, date_value: '2026-08-26' },
+            { field_uuid: 'field028', value: 1787846400, date_value: '2026-08-28' },
+            { field_uuid: 'field027', value: null, date_value: '' },
+          ],
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          display_id: 'DEMO-1001',
+          summary: '报表需求',
+          assess_manhour: 2400000,
+          total_manhour: 0,
+          remaining_manhour: 2400000,
+          field_values: [
+            { field_uuid: 'field027', value: 1788969600, date_value: '2026-09-10' },
+            { field_uuid: 'field028', value: 1789488000, date_value: '2026-09-16' },
+          ],
+        }),
+      })
+
+      const result = await adapter.listPendingWorkItems()
+
+      expect(result.total).toBe(2)
+      expect(result.partialCount).toBe(0)
+      expect(result.items.map(item => item.displayId)).toEqual(['DEMO-2002', 'DEMO-1001'])
+      expect(result.items[0]).toMatchObject({
+        kind: 'task',
+        parentDisplayId: 'DEMO-1001',
+        actualHours: 7,
+        remainingHours: 5,
+        estimatedHours: 12,
+        planStartDate: '2026-08-26',
+        planEndDate: '2026-08-28',
+      })
+      expect(result.items[1]).toMatchObject({
+        kind: 'requirement',
+        actualHours: 0,
+        remainingHours: 24,
+        estimatedHours: 24,
+      })
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/task/defect-todo/info'))).toBe(false)
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/tasks/update'))).toBe(false)
+    })
+
+    it('keeps a partial row when the detail GET fails', async () => {
+      mockLoginFlow()
+      mockTaskSearch([makeRequirementTask({
+        uuid: 'task-partial',
+        number: 2003,
+        name: 'DEMO-1001 部分数据',
+        issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+        status: { uuid: 's-todo', name: '未开始', category: 'to_do' },
+        project: { uuid: 'project-demo', name: 'Anonymous Project', identifier: 'DEMO' },
+      })])
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 })
+
+      const result = await adapter.listPendingWorkItems()
+
+      expect(result.partialCount).toBe(1)
+      expect(result.items[0]).toMatchObject({
+        displayId: 'DEMO-2003',
+        partial: true,
+        actualHours: null,
+        planStartDate: null,
+      })
+    })
+  })
+
+  describe('getRequirementDecompositionContext', () => {
+    it('returns task details and stable plan-date ordering while excluding defects', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        descriptionText: '需求详情',
+        relatedTasks: [
+          {
+            key: 'task-late',
+            uuid: 'late',
+            number: 2002,
+            name: 'DEMO-1001 后续实现',
+            issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+            status: { uuid: 's-progress', name: '进行中', category: 'in_progress' },
+            assign: { uuid: 'user-1', name: '示例用户' },
+          },
+          {
+            key: 'task-early',
+            uuid: 'early',
+            number: 2001,
+            name: 'DEMO-1001 前置实现',
+            issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+            status: { uuid: 's-todo', name: '未开始', category: 'to_do' },
+            assign: { uuid: 'user-1', name: '示例用户' },
+          },
+          {
+            key: 'task-no-date',
+            uuid: 'no-date',
+            number: 2003,
+            name: 'DEMO-1001 已完成任务',
+            issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+            status: { uuid: 's-done', name: '已完成', category: 'done' },
+          },
+          {
+            key: 'task-defect',
+            uuid: 'defect',
+            number: 2004,
+            name: '关联缺陷',
+            issueType: { uuid: 'it-defect', name: '缺陷', detailType: 3 },
+            status: { uuid: 's-todo', name: '待处理', category: 'to_do' },
+          },
+        ],
+      }))
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          display_id: 'DEMO-1001',
+          project_identifier: 'DEMO',
+          version: 'v8',
+          updated_at: '2026-08-17T00:00:00Z',
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          display_id: 'DEMO-2002',
+          desc: '<p>后续任务详情</p>',
+          field_values: [
+            { field_uuid: 'field027', value: '2026-08-20' },
+            { field_uuid: 'field028', value: '2026-08-21' },
+          ],
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          display_id: 'DEMO-2001',
+          description_text: '前置任务详情',
+          plan_start_date: '2026-08-18',
+          plan_end_date: '2026-08-19',
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          display_id: 'DEMO-2003',
+          desc: '<p>已完成任务详情</p>',
+        }),
+      })
+
+      const result = await adapter.getRequirementDecompositionContext({ requirementId: 'abc-123-def' })
+
+      expect(result.requirement).toMatchObject({
+        workItemKind: 'requirement',
+        displayId: 'DEMO-1001',
+        detail: '需求详情',
+      })
+      expect(result.decompositionRelation).toEqual({
+        verified: false,
+        uuid: null,
+        name: null,
+      })
+      expect(result.tasks.map(task => task.displayId)).toEqual([
+        'DEMO-2001',
+        'DEMO-2002',
+        'DEMO-2003',
+      ])
+      expect(result.tasks[0]).toMatchObject({
+        detail: '前置任务详情',
+        planStartDate: '2026-08-18',
+        planEndDate: '2026-08-19',
+      })
+      expect(result.pendingTasks.map(task => task.uuid)).toEqual(['early', 'late'])
+      expect(result.baseline).toMatchObject({
+        requirementVersion: 'v8',
+        requirementUpdatedAt: '2026-08-17T00:00:00Z',
+      })
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/task/defect/info'))).toBe(false)
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/tasks/update'))).toBe(false)
+    })
+
+    it('rejects a task before reading decomposition metadata', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+        name: '普通任务',
+      }))
+
+      await expect(adapter.getRequirementDecompositionContext({ requirementId: 'abc-123-def' }))
+        .rejects
+        .toThrow('Only requirements can be decomposed')
+
+      const taskInfoCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/task/abc-123-def/info'))
+      expect(taskInfoCalls).toHaveLength(0)
+    })
+
+    it('rejects a defect before reading decomposition metadata', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        issueType: { uuid: 'it-task', name: '任务', detailType: 2 },
+        subIssueType: { uuid: 'it-defect', name: '缺陷', detailType: 3 },
+        name: '普通缺陷',
+      }))
+
+      await expect(adapter.getRequirementDecompositionContext({ requirementId: 'abc-123-def' }))
+        .rejects
+        .toThrow('Only requirements can be decomposed')
+
+      const taskInfoCalls = mockFetch.mock.calls.filter(call => String(call[0]).includes('/task/abc-123-def/info'))
+      expect(taskInfoCalls).toHaveLength(0)
+    })
+
+    it('fails closed without any network request when the create contract is unavailable', async () => {
+      await expect(adapter.createRequirementDecomposition({
+        requirementUuid: 'requirement-uuid',
+        planHash: 'a'.repeat(64),
+        operations: [{
+          operation: 'create',
+          title: 'DEMO-1001 实现导出接口',
+          shortContent: '实现导出接口',
+          detail: '实现详情',
+        }],
+      })).rejects.toThrow('contract has not been confirmed')
+      expect(mockFetch).not.toHaveBeenCalled()
     })
   })
 

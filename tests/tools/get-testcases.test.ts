@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { TestCaseResult } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { TestCaseResult } from '../../src/types/requirement'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleGetTestcases } from '../../src/tools/get-testcases.js'
+import { handleGetTestcases } from '../../src/tools/get-testcases'
 
 const mockResult: TestCaseResult = {
   taskNumber: 100,

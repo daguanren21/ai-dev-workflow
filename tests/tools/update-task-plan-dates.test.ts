@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { UpdateTaskPlanDatesResult } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { UpdateTaskPlanDatesResult } from '../../src/types/requirement'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleUpdateTaskPlanDates } from '../../src/tools/update-task-plan-dates.js'
+import { handleUpdateTaskPlanDates } from '../../src/tools/update-task-plan-dates'
 
 const mockResult: UpdateTaskPlanDatesResult = {
   taskUuid: 'work-item-demo-uuid',

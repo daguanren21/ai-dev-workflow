@@ -1,8 +1,8 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { IssueDetail } from '../types/requirement.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { IssueDetail } from '../types/requirement'
 import { z } from 'zod/v4'
-import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
-import { downloadTrustedImages } from '../utils/safe-image.js'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content'
+import { downloadTrustedImages } from '../utils/safe-image'
 
 export const GetIssueDetailSchema = z.object({
   issueId: z.string().describe('ONES defect UUID, task key, number, or display ID (for example "DEMO-2001")'),

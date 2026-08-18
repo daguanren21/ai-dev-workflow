@@ -1,8 +1,8 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { Attachment, Requirement } from '../types/requirement.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { Attachment, Requirement } from '../types/requirement'
 import { z } from 'zod/v4'
-import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
-import { downloadTrustedImages } from '../utils/safe-image.js'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content'
+import { downloadTrustedImages } from '../utils/safe-image'
 
 export const GetWorkItemSchema = z.object({
   id: z.string().describe('ONES work-item ID, task number, displayId, or wiki page URL'),

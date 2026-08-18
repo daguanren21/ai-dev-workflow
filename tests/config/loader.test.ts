@@ -2,7 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { findConfigFile, loadConfig, loadConfigFromEnv, resolveAuthEnv } from '../../src/config/loader.js'
+import { findConfigFile, loadConfig, loadConfigFromEnv, resolveAuthEnv } from '../../src/config/loader'
 
 describe('config Loader', () => {
   const testDir = join(tmpdir(), `mcp-config-test-${Date.now()}`)

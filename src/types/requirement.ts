@@ -53,6 +53,35 @@ export interface SearchResult {
   pageSize: number
 }
 
+export type PendingWorkItemKind = 'requirement' | 'task'
+
+export interface PendingWorkItem {
+  uuid: string
+  displayId: string
+  kind: PendingWorkItemKind
+  title: string
+  statusName: string
+  statusCategory: 'to_do' | 'in_progress'
+  assigneeName: string | null
+  projectName: string | null
+  parentUuid: string | null
+  parentDisplayId: string | null
+  actualHours: number | null
+  remainingHours: number | null
+  estimatedHours: number | null
+  planStartDate: string | null
+  planEndDate: string | null
+  partial: boolean
+  warnings: string[]
+}
+
+export interface PendingWorkItemsResult {
+  items: PendingWorkItem[]
+  total: number
+  partialCount: number
+  fetchedAt: string
+}
+
 export interface RelatedIssue {
   key: string
   uuid: string
@@ -128,4 +157,94 @@ export interface UpdateTaskPlanDatesResult {
   taskUuid: string
   planStartDate: string | null
   planEndDate: string | null
+}
+
+export interface RequirementDecompositionTask {
+  uuid: string
+  displayId: string
+  name: string
+  detail: string
+  statusName: string
+  statusCategory: string
+  pending: boolean
+  assigneeName: string | null
+  assigneeUuid: string | null
+  planStartDate: string | null
+  planEndDate: string | null
+}
+
+export interface RequirementDecompositionBaseline {
+  requirementVersion: string | null
+  requirementUpdatedAt: string | null
+  requirementHash: string
+  relatedTasksHash: string
+}
+
+export interface RequirementDecompositionRelation {
+  verified: boolean
+  uuid: string | null
+  name: string | null
+}
+
+export interface RequirementDecompositionContext {
+  decompositionRelation: RequirementDecompositionRelation
+  requirement: {
+    workItemKind: 'requirement'
+    uuid: string
+    displayId: string
+    name: string
+    detail: string
+    issueTypeName: string
+    statusName: string
+    statusCategory: string
+    projectUuid: string | null
+    projectName: string | null
+    assigneeUuid: string | null
+    assigneeName: string | null
+  }
+  tasks: RequirementDecompositionTask[]
+  pendingTasks: RequirementDecompositionTask[]
+  baseline: RequirementDecompositionBaseline
+}
+
+/**
+ * A proposed create operation. Existing task updates deliberately use a
+ * different future contract so a create approval can never authorize edits.
+ */
+export interface RequirementTaskCreateOperation {
+  operation: 'create'
+  title: string
+  shortContent: string
+  detail: string
+  assigneeUuid?: string
+  priorityUuid?: string
+  complexityUuid?: string
+  splitTypeUuid?: string
+  productUuid?: string
+  moduleUuid?: string
+  estimatedHours?: number
+  planStartDate?: string
+  planEndDate?: string
+}
+
+export interface RequirementDecompositionPlan {
+  requirement: RequirementDecompositionContext['requirement']
+  decompositionRelation: RequirementDecompositionRelation
+  operations: RequirementTaskCreateOperation[]
+  baseline: RequirementDecompositionBaseline
+  planHash: string
+  approvalToken: string
+  expiresAt: string
+}
+
+export interface CreatedRequirementTask {
+  uuid: string
+  displayId: string
+  title: string
+}
+
+export interface ApplyRequirementDecompositionResult {
+  requirementUuid: string
+  planHash: string
+  createdTasks: CreatedRequirementTask[]
 }

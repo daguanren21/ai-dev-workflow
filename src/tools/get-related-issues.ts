@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { RelatedIssue } from '../types/requirement.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { RelatedIssue } from '../types/requirement'
 import { z } from 'zod/v4'
-import { sanitizeExternalInline, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
+import { sanitizeExternalInline, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content'
 
 export const GetRelatedIssuesSchema = z.object({
   taskId: z.string().describe('The parent task ID or key (e.g. "mock-task-uuid" or "task-mock-task-uuid")'),

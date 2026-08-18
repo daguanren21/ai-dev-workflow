@@ -1,6 +1,6 @@
-import type { BaseAdapter } from '../adapters/base.js'
+import type { BaseAdapter } from '../adapters/base'
 import { z } from 'zod/v4'
-import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content'
 
 export const SearchRequirementsSchema = z.object({
   query: z.string().describe('Search keywords'),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeExternalInline, sanitizeExternalText, sanitizePublicError } from '../../src/utils/external-content.js'
+import { sanitizeExternalInline, sanitizeExternalText, sanitizePublicError } from '../../src/utils/external-content'
 
 describe('external content sanitization', () => {
   it('removes active HTML and URL credentials while preserving readable text', () => {

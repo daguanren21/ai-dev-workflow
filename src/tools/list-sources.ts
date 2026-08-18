@@ -1,5 +1,5 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { McpConfig } from '../types/config.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { McpConfig } from '../types/config'
 
 export async function handleListSources(
   adapters: Map<string, BaseAdapter>,

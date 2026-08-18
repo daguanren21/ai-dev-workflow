@@ -1,7 +1,7 @@
-import type { BaseAdapter } from '../../src/adapters/base.js'
-import type { RelatedIssue } from '../../src/types/requirement.js'
+import type { BaseAdapter } from '../../src/adapters/base'
+import type { RelatedIssue } from '../../src/types/requirement'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { handleGetRelatedIssues } from '../../src/tools/get-related-issues.js'
+import { handleGetRelatedIssues } from '../../src/tools/get-related-issues'
 
 const mockIssues: RelatedIssue[] = [
   {

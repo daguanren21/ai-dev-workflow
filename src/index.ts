@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
-import { loadConfig } from './config/loader.js'
-import { createRequirementsServer } from './server.js'
-import { sanitizePublicError } from './utils/external-content.js'
+import { loadConfig } from './config/loader'
+import { createRequirementsServer } from './server'
+import { sanitizePublicError } from './utils/external-content'
 
 /**
  * Load .env file into process.env (if it exists).

@@ -1,9 +1,9 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { Attachment, IssueDetail, Requirement } from '../types/requirement.js'
-import type { OnesWorkItemKind } from '../utils/ones-issue-kind.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { Attachment, IssueDetail, Requirement } from '../types/requirement'
+import type { OnesWorkItemKind } from '../utils/ones-issue-kind'
 import { z } from 'zod/v4'
-import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content.js'
-import { classifyOnesWorkItem, workItemKindLabel } from '../utils/ones-issue-kind.js'
+import { sanitizeExternalInline, sanitizeExternalText, UNTRUSTED_SOURCE_NOTICE } from '../utils/external-content'
+import { classifyOnesWorkItem, workItemKindLabel } from '../utils/ones-issue-kind'
 
 export const GetGrillingBriefSchema = z.object({
   id: z.string().describe('ONES work-item ID, number, displayId, or wiki URL'),

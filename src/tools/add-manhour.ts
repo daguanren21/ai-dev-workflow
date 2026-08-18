@@ -1,5 +1,5 @@
-import type { BaseAdapter } from '../adapters/base.js'
-import type { AddManhourResult } from '../types/requirement.js'
+import type { BaseAdapter } from '../adapters/base'
+import type { AddManhourResult } from '../types/requirement'
 import { z } from 'zod/v4'
 
 export const AddManhourSchema = z.object({
