@@ -1,5 +1,11 @@
 # ai-dev-requirements
 
+## 0.3.0
+
+### Minor Changes
+
+- [`0de2cab`](https://github.com/daguanren21/ai-dev-workflow/commit/0de2cab728014a3daaf7072e4368457f73e9d63d) Thanks [@daguanren21](https://github.com/daguanren21)! - Add safe ONES pending-task inspection and requirement-decomposition workflows, including approval-gated task creation and scheduling details for dashboard consumers.
+
 ## 0.2.1
 
 ### Patch Changes
