@@ -7,7 +7,7 @@ export interface OnesIssueTypeLike {
 
 /**
  * ONES issueType.detailType / subIssueType.detailType:
- * 1 = 需求, 2 = 任务, 3 = 缺陷.
+ * 1 = 需求, 2 = 任务, 3 = 缺陷, 5 = 子需求.
  *
  * A concrete sub-type is more specific than its parent issue type. Some ONES
  * teams model defects as a task parent type with a defect sub-type, so the
@@ -19,7 +19,7 @@ export function classifyOnesWorkItem(
 ): OnesWorkItemKind {
   for (const candidate of [subIssueType, issueType]) {
     const detailType = candidate?.detailType
-    if (detailType === 1)
+    if (detailType === 1 || detailType === 5)
       return 'requirement'
     if (detailType === 2)
       return 'task'
@@ -27,7 +27,7 @@ export function classifyOnesWorkItem(
       return 'defect'
 
     const name = (candidate?.name ?? '').trim().toLowerCase()
-    if (name === '需求' || name === 'demand' || name === 'story' || name === 'feature')
+    if (name === '需求' || name === '子需求' || name === 'demand' || name === 'story' || name === 'feature')
       return 'requirement'
     if (name === '缺陷' || name === 'bug' || name === 'defect')
       return 'defect'

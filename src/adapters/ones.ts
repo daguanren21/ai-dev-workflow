@@ -2132,8 +2132,8 @@ export class OnesAdapter extends BaseAdapter {
 
   /**
    * Fetch a work item by UUID, number, display id, or wiki URL.
-   * Routes by issueType.detailType: requirement (1) loads wiki docs;
-   * task (2) and defect (3) return the item itself without wiki expansion.
+   * Routes by issueType.detailType: requirements (1 and 5) load wiki docs;
+   * tasks (2) and defects (3) return the item itself without wiki expansion.
    */
   async getRequirement(params: GetRequirementParams): Promise<Requirement> {
     const wikiRoute = parseOnesWikiPageRoute(params.id)

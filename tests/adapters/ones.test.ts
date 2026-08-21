@@ -819,6 +819,37 @@ describe('onesAdapter', () => {
       expect(mockFetch).toHaveBeenCalledTimes(9)
     })
 
+    it('should load a child requirement with ONES detailType 5', async () => {
+      mockLoginFlow()
+      mockProjectList('DEMO', 'project-demo-uuid')
+      mockTaskSearch([{
+        key: 'task-child-requirement-uuid',
+        uuid: 'child-requirement-uuid',
+        number: 1001,
+        name: '匿名子需求',
+        issueType: { uuid: 'it-sub-requirement', name: '子需求', detailType: 5 },
+        status: { uuid: 's1', name: '进行中', category: 'in_progress' },
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
+      }])
+      mockTaskResponse(makeRequirementTask({
+        key: 'task-child-requirement-uuid',
+        uuid: 'child-requirement-uuid',
+        number: 1001,
+        issueType: { uuid: 'it-sub-requirement', name: '子需求', detailType: 5 },
+        name: '匿名子需求',
+        project: { uuid: 'project-demo-uuid', name: 'Anonymous Project' },
+        descriptionText: '子需求正文。',
+      }))
+      mockRelatedActivitiesResponse([])
+
+      const result = await adapter.getRequirement({ id: 'DEMO-1001' })
+
+      expect(result.type).toBe('feature')
+      expect(result.raw.workItemKind).toBe('requirement')
+      expect(result.description).toContain('## Requirement Detail')
+      expect(result.description).toContain('子需求正文。')
+    })
+
     it('should skip wiki expansion for a task and point to the next tool', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({

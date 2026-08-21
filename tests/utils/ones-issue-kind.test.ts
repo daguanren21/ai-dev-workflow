@@ -8,6 +8,11 @@ describe('classifyOnesWorkItem', () => {
     expect(classifyOnesWorkItem({ detailType: 3, name: '需求' })).toBe('defect')
   })
 
+  it('classifies child requirements by ONES detailType and localized name', () => {
+    expect(classifyOnesWorkItem({ detailType: 5, name: '子需求' })).toBe('requirement')
+    expect(classifyOnesWorkItem({ name: '子需求' })).toBe('requirement')
+  })
+
   it('lets a concrete defect subtype override a task parent type', () => {
     expect(classifyOnesWorkItem(
       { detailType: 2, name: '任务' },
