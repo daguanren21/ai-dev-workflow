@@ -1,5 +1,11 @@
 # ai-dev-requirements
 
+## 0.3.1
+
+### Patch Changes
+
+- [`4ebbcae`](https://github.com/daguanren21/ai-dev-workflow/commit/4ebbcae2f32b271d0d9b0f241c12c88308e06c49) Thanks [@daguanren21](https://github.com/daguanren21)! - Classify ONES child requirements with `detailType=5` as requirements in `get_work_item`.
+
 ## 0.3.0
 
 ### Minor Changes
