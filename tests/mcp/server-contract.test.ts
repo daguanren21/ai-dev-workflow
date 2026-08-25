@@ -40,6 +40,26 @@ const requirement: Requirement = {
 const adapter = {
   sourceType: 'ones',
   getRequirement: vi.fn().mockResolvedValue(requirement),
+  resolveWikiPath: vi.fn().mockResolvedValue({
+    teamId: 'team-demo-1',
+    spaceId: 'space-demo-1',
+    pageId: 'page-demo-parent',
+    title: 'Personal Blog',
+    breadcrumb: ['Example Department', 'Home', 'Personal Blog'],
+  }),
+  getWikiPage: vi.fn().mockResolvedValue({
+    pageId: 'page-demo-parent',
+    teamId: 'team-demo-1',
+    spaceId: 'space-demo-1',
+    title: 'Personal Blog',
+    parentPageId: 'page-demo-home',
+    breadcrumb: ['Example Department', 'Home', 'Personal Blog'],
+    version: 'version-1',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    content: '',
+    attachments: [],
+    contentHash: 'content-hash-1',
+  }),
   getIssueDetail: vi.fn().mockRejectedValue(
     new Error('remote failed token=secret https://ones.test/error?signature=private'),
   ),
@@ -76,6 +96,14 @@ describe('requirements MCP contract', () => {
       expect(names).toContain('inspect_requirement_decomposition')
       expect(names).toContain('prepare_requirement_decomposition')
       expect(names).toContain('apply_requirement_decomposition')
+      expect(names).toContain('get_ones_wiki_page')
+      expect(names).toContain('search_ones_wiki')
+      expect(names).toContain('export_ones_wiki_tree')
+      expect(names).toContain('lookup_environment_access')
+      expect(names).toContain('prepare_wiki_create')
+      expect(names).toContain('apply_wiki_create')
+      expect(names).toContain('prepare_wiki_update')
+      expect(names).toContain('apply_wiki_update')
       expect(names).not.toContain('get_requirement')
 
       const brief = result.tools.find(tool => tool.name === 'get_grilling_brief')
@@ -84,11 +112,26 @@ describe('requirements MCP contract', () => {
       const inspectDecomposition = result.tools.find(tool => tool.name === 'inspect_requirement_decomposition')
       const prepareDecomposition = result.tools.find(tool => tool.name === 'prepare_requirement_decomposition')
       const applyDecomposition = result.tools.find(tool => tool.name === 'apply_requirement_decomposition')
+      const getWikiPage = result.tools.find(tool => tool.name === 'get_ones_wiki_page')
+      const prepareWikiCreate = result.tools.find(tool => tool.name === 'prepare_wiki_create')
+      const prepareWikiUpdate = result.tools.find(tool => tool.name === 'prepare_wiki_update')
+      const applyWikiUpdate = result.tools.find(tool => tool.name === 'apply_wiki_update')
       expect(inspectDecomposition?.annotations?.readOnlyHint).toBe(true)
       expect(pendingWorkItems?.annotations?.readOnlyHint).toBe(true)
       expect(prepareDecomposition?.annotations?.readOnlyHint).toBe(true)
       expect(applyDecomposition?.annotations).toMatchObject({
         readOnlyHint: false,
+        idempotentHint: false,
+      })
+      expect(getWikiPage?.annotations?.readOnlyHint).toBe(true)
+      expect(prepareWikiCreate?.outputSchema).toMatchObject({
+        type: 'object',
+        required: expect.arrayContaining(['operationHash', 'approvalToken', 'expiresAt']),
+      })
+      expect(prepareWikiUpdate?.annotations?.readOnlyHint).toBe(true)
+      expect(applyWikiUpdate?.annotations).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: true,
         idempotentHint: false,
       })
       expect(planDates?.annotations).toMatchObject({
@@ -133,6 +176,28 @@ describe('requirements MCP contract', () => {
       })
       expect(JSON.stringify(call)).not.toContain('call_write_tool')
       expect(JSON.stringify(call)).not.toContain('secret')
+
+      const wikiCreate = await client.callTool({
+        name: 'prepare_wiki_create',
+        arguments: {
+          parentPath: ['Example Department', 'Home', 'Personal Blog'],
+          title: 'Harness Notes',
+          markdown: 'Anonymous example content.',
+        },
+      })
+      expect(wikiCreate.isError).not.toBe(true)
+      expect(wikiCreate.structuredContent).toMatchObject({
+        kind: 'create',
+        operationHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        approvalToken: expect.stringMatching(/^[a-f0-9]{48}$/),
+        expiresAt: expect.any(String),
+      })
+      expect(wikiCreate.content).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          type: 'text',
+          text: expect.stringContaining('approvalToken:'),
+        }),
+      ]))
 
       const sources = await client.callTool({ name: 'list_sources', arguments: {} })
       expect(JSON.stringify(sources)).toContain('configured')

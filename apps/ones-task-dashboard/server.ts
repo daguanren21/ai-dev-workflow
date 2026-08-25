@@ -7,38 +7,12 @@ import { fileURLToPath } from 'node:url'
 import { createAdapter } from '../../src/adapters/index'
 import { loadConfig } from '../../src/config/loader'
 import { sanitizePublicError } from '../../src/utils/external-content'
+import { loadNearestEnv } from '../../src/utils/load-env'
 
 const HOST = '127.0.0.1'
 const PORT = Number.parseInt(process.env.ONES_DASHBOARD_PORT ?? '4178', 10)
 const isProduction = process.env.NODE_ENV === 'production'
 const rootDir = dirname(fileURLToPath(import.meta.url))
-
-function loadEnvFile(startDir: string): void {
-  let current = resolve(startDir)
-  while (true) {
-    const path = join(current, '.env')
-    if (existsSync(path)) {
-      for (const rawLine of readFileSync(path, 'utf8').split('\n')) {
-        const line = rawLine.trim()
-        if (!line || line.startsWith('#'))
-          continue
-        const separator = line.indexOf('=')
-        if (separator < 1)
-          continue
-        const key = line.slice(0, separator).trim()
-        let value = line.slice(separator + 1).trim()
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
-          value = value.slice(1, -1)
-        process.env[key] ??= value
-      }
-      return
-    }
-    const parent = dirname(current)
-    if (parent === current)
-      return
-    current = parent
-  }
-}
 
 function setSecurityHeaders(response: ServerResponse): void {
   response.setHeader('Cache-Control', 'no-store')
@@ -89,7 +63,7 @@ function serveStatic(request: IncomingMessage, response: ServerResponse): void {
 }
 
 async function main(): Promise<void> {
-  loadEnvFile(process.cwd())
+  loadNearestEnv()
   const loaded = loadConfig(process.cwd())
   const source = loaded.sources.find(item => item.type === (loaded.config.defaultSource ?? 'ones'))
   if (!source)

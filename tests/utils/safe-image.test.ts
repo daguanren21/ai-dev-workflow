@@ -56,6 +56,33 @@ describe('downloadTrustedImage', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
+  it.each([
+    'https://[::1]/internal.png',
+    'https://[::ffff:8.8.8.8]/mapped.png',
+    'https://[2001:db8::1]/documentation.png',
+  ])('rejects non-public IPv6 targets before making a request: %s', async (url) => {
+    const fetchImpl = vi.fn()
+
+    await expect(downloadTrustedImage(url, {
+      classifyUrl: () => 'source-issued',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })).resolves.toBeNull()
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('allows a source-issued public IPv6 target', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(pngResponse())
+
+    await expect(downloadTrustedImage('https://[2001:4860:4860::8888]/image.png', {
+      classifyUrl: () => 'source-issued',
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })).resolves.toEqual({
+      base64: Buffer.from(PNG_BYTES).toString('base64'),
+      mimeType: 'image/png',
+    })
+    expect(fetchImpl).toHaveBeenCalledOnce()
+  })
+
   it('revalidates redirects and blocks a redirect to private infrastructure', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(null, {
       status: 302,

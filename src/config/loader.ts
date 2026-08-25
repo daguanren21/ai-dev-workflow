@@ -5,11 +5,13 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { z } from 'zod/v4'
 
+const TokenAuthSchema = z.object({
+  type: z.literal('token'),
+  tokenEnv: z.string(),
+})
+
 const AuthSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('token'),
-    tokenEnv: z.string(),
-  }),
+  TokenAuthSchema,
   z.object({
     type: z.literal('basic'),
     usernameEnv: z.string(),
@@ -41,6 +43,7 @@ const SourceConfigSchema = z.object({
   enabled: z.boolean(),
   apiBase: z.string().url(),
   auth: AuthSchema,
+  openApiAuth: TokenAuthSchema.optional(),
   headers: z.record(z.string(), z.string()).optional(),
   options: z.record(z.string(), z.unknown()).optional(),
 })
@@ -78,7 +81,7 @@ function findConfigFile(startDir: string): string | null {
  * Resolve environment variable references in auth config.
  * Reads actual env var values for fields ending with "Env".
  */
-function resolveAuthEnv(auth: AuthConfig): Record<string, string> {
+function resolveAuthEnv(auth: AuthConfig, configField = 'auth'): Record<string, string> {
   const resolved: Record<string, string> = {}
 
   for (const [key, value] of Object.entries(auth)) {
@@ -87,7 +90,7 @@ function resolveAuthEnv(auth: AuthConfig): Record<string, string> {
     if (key.endsWith('Env') && typeof value === 'string') {
       const envValue = process.env[value]
       if (!envValue) {
-        throw new Error(`Environment variable "${value}" is not set (required by auth.${key})`)
+        throw new Error(`Environment variable "${value}" is not set (required by ${configField}.${key})`)
       }
       // Strip the "Env" suffix for the resolved key
       const resolvedKey = key.slice(0, -3)
@@ -105,6 +108,7 @@ export interface ResolvedSource {
   type: SourceType
   config: SourceConfig
   resolvedAuth: Record<string, string>
+  resolvedOpenApiAuth?: Record<string, string>
 }
 
 export interface LoadConfigResult {
@@ -129,11 +133,16 @@ function loadConfigFromEnv(): McpConfig | null {
 
   // Try to read options from config file if it exists
   let options: Record<string, unknown> | undefined
+  let configuredOpenApiAuth: SourceConfig['openApiAuth']
   const configPath = findConfigFile(process.cwd())
   if (configPath) {
     try {
-      const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as { sources?: { ones?: { options?: Record<string, unknown> } } }
+      const raw = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+        sources?: { ones?: Pick<SourceConfig, 'openApiAuth' | 'options'> }
+      }
       options = raw?.sources?.ones?.options
+      const openApiAuthResult = TokenAuthSchema.safeParse(raw?.sources?.ones?.openApiAuth)
+      configuredOpenApiAuth = openApiAuthResult.success ? openApiAuthResult.data : undefined
     }
     catch {
       // ignore parse errors, env config is primary
@@ -150,6 +159,9 @@ function loadConfigFromEnv(): McpConfig | null {
           emailEnv: 'ONES_ACCOUNT',
           passwordEnv: 'ONES_PASSWORD',
         },
+        openApiAuth: process.env.ONES_OPENAPI_TOKEN
+          ? { type: 'token', tokenEnv: 'ONES_OPENAPI_TOKEN' }
+          : configuredOpenApiAuth,
         options,
       },
     },
@@ -170,10 +182,14 @@ export function loadConfig(startDir?: string): LoadConfigResult {
     for (const [type, sourceConfig] of Object.entries(envConfig.sources)) {
       if (sourceConfig && sourceConfig.enabled) {
         const resolvedAuth = resolveAuthEnv(sourceConfig.auth)
+        const resolvedOpenApiAuth = sourceConfig.openApiAuth
+          ? resolveAuthEnv(sourceConfig.openApiAuth, 'openApiAuth')
+          : undefined
         sources.push({
           type: type as SourceType,
           config: sourceConfig,
           resolvedAuth,
+          resolvedOpenApiAuth,
         })
       }
     }
@@ -214,10 +230,14 @@ export function loadConfig(startDir?: string): LoadConfigResult {
   for (const [type, sourceConfig] of Object.entries(config.sources)) {
     if (sourceConfig && sourceConfig.enabled) {
       const resolvedAuth = resolveAuthEnv(sourceConfig.auth)
+      const resolvedOpenApiAuth = sourceConfig.openApiAuth
+        ? resolveAuthEnv(sourceConfig.openApiAuth, 'openApiAuth')
+        : undefined
       sources.push({
         type: type as SourceType,
         config: sourceConfig,
         resolvedAuth,
+        resolvedOpenApiAuth,
       })
     }
   }

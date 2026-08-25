@@ -7,6 +7,7 @@ const ADAPTER_MAP: Record<string, new (
   sourceType: SourceType,
   config: SourceConfig,
   resolvedAuth: Record<string, string>,
+  resolvedOpenApiAuth?: Record<string, string>,
 ) => BaseAdapter> = {
   ones: OnesAdapter,
 }
@@ -18,6 +19,7 @@ export function createAdapter(
   sourceType: SourceType,
   config: SourceConfig,
   resolvedAuth: Record<string, string>,
+  resolvedOpenApiAuth?: Record<string, string>,
 ): BaseAdapter {
   const AdapterClass = ADAPTER_MAP[sourceType]
   if (!AdapterClass) {
@@ -25,7 +27,7 @@ export function createAdapter(
       `Unsupported source type: "${sourceType}". Supported: ${Object.keys(ADAPTER_MAP).join(', ')}`,
     )
   }
-  return new AdapterClass(sourceType, config, resolvedAuth)
+  return new AdapterClass(sourceType, config, resolvedAuth, resolvedOpenApiAuth)
 }
 
 export { BaseAdapter } from './base'

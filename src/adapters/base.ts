@@ -1,5 +1,6 @@
 import type { SourceConfig } from '../types/config'
 import type { AddManhourResult, ApplyRequirementDecompositionResult, IssueDetail, PendingWorkItemsResult, RelatedIssue, Requirement, RequirementDecompositionBaseline, RequirementDecompositionContext, RequirementDecompositionRelation, RequirementTaskCreateOperation, SearchResult, SourceType, TestCaseResult, UpdateTaskPlanDatesResult } from '../types/requirement'
+import type { WikiCreateRequest, WikiPage, WikiPageChildrenParams, WikiPageLocator, WikiPageSearchParams, WikiPageSummary, WikiPathResolution, WikiPathResolveParams, WikiUpdateRequest, WikiWriteResult } from '../types/wiki'
 import type { RemoteImageTrust } from '../utils/safe-image'
 
 export interface GetRequirementParams {
@@ -60,15 +61,18 @@ export abstract class BaseAdapter {
   readonly sourceType: SourceType
   protected readonly config: SourceConfig
   protected readonly resolvedAuth: Record<string, string>
+  protected readonly resolvedOpenApiAuth?: Record<string, string>
 
   constructor(
     sourceType: SourceType,
     config: SourceConfig,
     resolvedAuth: Record<string, string>,
+    resolvedOpenApiAuth?: Record<string, string>,
   ) {
     this.sourceType = sourceType
     this.config = config
     this.resolvedAuth = resolvedAuth
+    this.resolvedOpenApiAuth = resolvedOpenApiAuth
   }
 
   classifyRemoteImageUrl(url: string): RemoteImageTrust {
@@ -112,4 +116,34 @@ export abstract class BaseAdapter {
   abstract createRequirementDecomposition(
     params: CreateRequirementDecompositionParams,
   ): Promise<ApplyRequirementDecompositionResult>
+
+  /** Read one Wiki page. Adapters without Wiki support fail closed. */
+  async getWikiPage(_params: WikiPageLocator): Promise<WikiPage> {
+    throw new Error(`${this.sourceType}: Wiki page reads are not supported`)
+  }
+
+  /** Search Wiki metadata. This must never fall back to guessing an endpoint. */
+  async searchWikiPages(_params: WikiPageSearchParams): Promise<WikiPageSummary[]> {
+    throw new Error(`${this.sourceType}: Wiki search endpoint is not verified`)
+  }
+
+  /** List direct Wiki children. This must never infer a tree from unrelated links. */
+  async listWikiPageChildren(_params: WikiPageChildrenParams): Promise<WikiPageSummary[]> {
+    throw new Error(`${this.sourceType}: Wiki tree endpoint is not verified`)
+  }
+
+  /** Resolve a breadcrumb path and reject missing or ambiguous matches. */
+  async resolveWikiPath(_params: WikiPathResolveParams): Promise<WikiPathResolution> {
+    throw new Error(`${this.sourceType}: Wiki path resolution is not supported`)
+  }
+
+  /** Production Wiki writes stay disabled until the exact provider endpoint is verified. */
+  async createWikiPage(_params: WikiCreateRequest): Promise<WikiWriteResult> {
+    throw new Error(`${this.sourceType}: Wiki create endpoint is not verified`)
+  }
+
+  /** Production Wiki writes stay disabled until the exact provider endpoint is verified. */
+  async updateWikiPage(_params: WikiUpdateRequest): Promise<WikiWriteResult> {
+    throw new Error(`${this.sourceType}: Wiki update endpoint is not verified`)
+  }
 }

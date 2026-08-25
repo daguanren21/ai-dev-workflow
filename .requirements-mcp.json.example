@@ -8,6 +8,10 @@
         "emailEnv": "ONES_ACCOUNT",
         "passwordEnv": "ONES_PASSWORD"
       },
+      "openApiAuth": {
+        "type": "token",
+        "tokenEnv": "ONES_OPENAPI_TOKEN"
+      },
       "options": {
         "testcaseLibraryUuid": "YOUR_LIBRARY_UUID"
       }

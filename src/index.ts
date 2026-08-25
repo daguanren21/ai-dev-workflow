@@ -1,45 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { loadConfig } from './config/loader'
 import { createRequirementsServer } from './server'
 import { sanitizePublicError } from './utils/external-content'
-
-/**
- * Load .env file into process.env (if it exists).
- * Searches from cwd upward, same as config loader.
- */
-function loadEnvFile() {
-  let dir = process.cwd()
-  while (true) {
-    const envPath = resolve(dir, '.env')
-    if (existsSync(envPath)) {
-      const content = readFileSync(envPath, 'utf-8')
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim()
-        if (!trimmed || trimmed.startsWith('#'))
-          continue
-        const eqIndex = trimmed.indexOf('=')
-        if (eqIndex === -1)
-          continue
-        const key = trimmed.slice(0, eqIndex).trim()
-        let value = trimmed.slice(eqIndex + 1).trim()
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\'')))
-          value = value.slice(1, -1)
-        if (!process.env[key])
-          process.env[key] = value
-      }
-      return
-    }
-    const parent = dirname(dir)
-    if (parent === dir)
-      break
-    dir = parent
-  }
-}
+import { loadNearestEnv } from './utils/load-env'
 
 function createServer() {
-  loadEnvFile()
+  loadNearestEnv()
 
   try {
     return createRequirementsServer(loadConfig())

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OnesAdapter } from '../../src/adapters/ones'
+import { WikiPathResolutionError } from '../../src/types/wiki'
 import onesFixture from '../fixtures/ones-response.json'
+
+const mockReplaceOnesWikiDocument = vi.hoisted(() => vi.fn())
+vi.mock('../../src/utils/ones-wiki-collab', () => ({
+  replaceOnesWikiDocument: mockReplaceOnesWikiDocument,
+}))
 
 // Mock global fetch for ONES PKCE flow + GraphQL calls
 const mockFetch = vi.fn()
@@ -77,6 +83,31 @@ function mockLoginFlow(options: { authorizeLocation?: string, directCode?: boole
       org_my_team: {
         teams: [{ uuid: 'team-1', name: 'Default Team' }],
       },
+    }),
+  })
+}
+
+function mockProductWikiCreate() {
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({
+      draft_uuid: 'wiki-draft-demo',
+      ref_uuid: 'wiki-document-demo',
+      title: 'Technical Sharing',
+    }),
+  })
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ token: 'editor-token-demo' }),
+  })
+  mockFetch.mockResolvedValueOnce({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({
+      page_uuid: 'wiki-created-product-demo',
+      title: 'Technical Sharing',
     }),
   })
 }
@@ -188,6 +219,10 @@ describe('onesAdapter', () => {
   beforeEach(() => {
     mockFetch.mockReset()
     vi.clearAllMocks()
+    mockReplaceOnesWikiDocument.mockImplementation(async (_options, update) => {
+      update({ blocks: [], comments: {}, meta: {}, authors: [], commentators: [] })
+      return { snapshotVersion: 10, version: 11, changed: true }
+    })
     adapter = new OnesAdapter(
       'ones',
       {
@@ -196,6 +231,7 @@ describe('onesAdapter', () => {
         auth: { type: 'ones-pkce', emailEnv: 'ONES_ACCOUNT', passwordEnv: 'ONES_PASSWORD' },
       },
       { email: 'test@example.com', password: 'test-pass' },
+      { token: 'test-openapi-token' },
     )
   })
 
@@ -508,6 +544,498 @@ describe('onesAdapter', () => {
       expect(result.description).toContain('支持直接粘贴 Wiki 页面 URL 获取需求详情')
     })
 
+    it('should read a Wiki page with verified detail and content endpoints', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          result: 'SUCCESS',
+          data: {
+            id: 'wiki-demo-uuid',
+            title: 'Anonymous Wiki Page',
+            parentID: 'wiki-parent-uuid',
+            spaceID: 'space-demo-uuid',
+            updatedTime: 1767225600,
+            content: JSON.stringify({
+              blocks: [{ id: 'text-demo', type: 'text', text: [{ insert: 'Anonymous content' }] }],
+              comments: {},
+              meta: {},
+            }),
+          },
+        }),
+      })
+      mockWikiContent('## Anonymous content\n\nNo production data is stored in this fixture.')
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          result: 'SUCCESS',
+          data: {
+            pages: [
+              { id: 'wiki-root-uuid', title: 'Example Space', spaceID: 'space-demo-uuid', parentID: '' },
+              { id: 'wiki-demo-uuid', title: 'Anonymous Wiki Page', spaceID: 'space-demo-uuid', parentID: 'wiki-root-uuid' },
+            ],
+          },
+        }),
+      })
+
+      const result = await adapter.getWikiPage({
+        url: 'https://ones.test/wiki/#/team/team-demo-uuid/space/space-demo-uuid/page/wiki-demo-uuid',
+      })
+
+      expect(result).toMatchObject({
+        pageId: 'wiki-demo-uuid',
+        teamId: 'team-demo-uuid',
+        spaceId: 'space-demo-uuid',
+        title: 'Anonymous Wiki Page',
+        parentPageId: 'wiki-parent-uuid',
+        breadcrumb: ['Example Space', 'Anonymous Wiki Page'],
+        version: '1767225600',
+      })
+      expect(result.content).toContain('Anonymous content')
+      expect(result.contentHash).toMatch(/^[a-f0-9]{64}$/)
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ones.test/openapi/v2/wiki/pages/wiki-demo-uuid?teamID=team-demo-uuid',
+        { headers: expect.any(Headers) },
+      )
+      const openApiCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/openapi/v2/wiki/pages/wiki-demo-uuid?'))
+      expect((openApiCall?.[1].headers as Headers).get('Authorization')).toBe('Bearer test-openapi-token')
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ones.test/wiki/api/wiki/team/team-demo-uuid/online_page/wiki-demo-uuid/content',
+        { headers: { Authorization: 'Bearer test-access-token' } },
+      )
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://ones.test/openapi/v2/wiki/spaces/space-demo-uuid/pages?teamID=team-demo-uuid&archived=false',
+        { headers: expect.any(Headers) },
+      )
+    })
+
+    it('should search Wiki pages through the documented read-only Open API', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          result: 'SUCCESS',
+          data: {
+            pages: [{
+              fields: {
+                id: 'wiki-search-demo',
+                title: 'Anonymous Runbook',
+                spaceID: 'space-demo',
+                spaceName: 'Example Space',
+                updatedTime: 1767225600,
+              },
+            }],
+          },
+        }),
+      })
+
+      const result = await adapter.searchWikiPages({ query: 'runbook', limit: 10 })
+
+      expect(result).toEqual([expect.objectContaining({
+        pageId: 'wiki-search-demo',
+        title: 'Anonymous Runbook',
+        breadcrumb: ['Example Space', 'Anonymous Runbook'],
+      })])
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        'https://ones.test/openapi/v2/wiki/search/pages?teamID=team-1&keyword=runbook&limit=10&includeArchived=false',
+        { headers: expect.any(Headers) },
+      )
+    })
+
+    it('should fall back to the read-only Wiki product search when Open API returns 401', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          total: 1,
+          has_next: false,
+          datas: {
+            page: [{
+              fields: {
+                page_uuid: 'wiki-search-fallback',
+                title: 'Anonymous Annual Plan',
+                space_uuid: 'space-fallback',
+                space_name: 'Example Department',
+                updated_time: 1767225600,
+                archived: false,
+              },
+              highlight_fields: { title: ['Anonymous Annual Plan'] },
+            }],
+          },
+        }),
+      })
+
+      const result = await adapter.searchWikiPages({ query: 'annual', limit: 10 })
+
+      expect(result).toEqual([expect.objectContaining({
+        pageId: 'wiki-search-fallback',
+        spaceId: 'space-fallback',
+        title: 'Anonymous Annual Plan',
+        breadcrumb: ['Example Department', 'Anonymous Annual Plan'],
+      })])
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        'https://ones.test/wiki/api/wiki/team/team-1/search?q=annual&types=page&start=0&limit=10&query_param=title&include_archived=false',
+        { headers: { Authorization: 'Bearer test-access-token' } },
+      )
+      expect(mockFetch.mock.calls.slice(7).every(call => call[1]?.method === undefined)).toBe(true)
+    })
+
+    it('should fall back to the read-only Wiki product search when no Open API credential is configured', async () => {
+      const adapterWithoutOpenApiToken = new OnesAdapter(
+        'ones',
+        {
+          enabled: true,
+          apiBase: 'https://ones.test',
+          auth: { type: 'ones-pkce', emailEnv: 'ONES_ACCOUNT', passwordEnv: 'ONES_PASSWORD' },
+        },
+        { email: 'test@example.com', password: 'test-pass' },
+      )
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          datas: {
+            page: [{
+              fields: {
+                page_uuid: 'wiki-search-without-openapi',
+                title: 'Anonymous Runbook',
+                space_uuid: 'space-fallback',
+                space_name: 'Example Department',
+                archived: false,
+              },
+            }],
+          },
+        }),
+      })
+
+      const result = await adapterWithoutOpenApiToken.searchWikiPages({ query: 'runbook' })
+
+      expect(result[0]).toMatchObject({
+        pageId: 'wiki-search-without-openapi',
+        title: 'Anonymous Runbook',
+      })
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/openapi/v2/'))).toBe(false)
+    })
+
+    it('should resolve a Wiki path through legacy ancestors and a title prefix', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          datas: {
+            page: [{
+              fields: {
+                page_uuid: 'wiki-plan-fallback',
+                title: '2026 Annual Plan Goals',
+                space_uuid: 'space-department',
+                space_name: 'Example Department',
+                archived: false,
+              },
+            }],
+          },
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          uuid: 'wiki-plan-fallback',
+          title: '2026 Annual Plan Goals',
+          parent_uuid: 'wiki-annual-plans',
+          space_uuid: 'space-department',
+          space_name: 'Example Department',
+          updated_time: 1767225600,
+          ancestors: [
+            { uuid: 'wiki-annual-plans', title: 'Annual Plans', parent_uuid: 'wiki-home' },
+            { uuid: 'wiki-home', title: 'Department Wiki', parent_uuid: '' },
+          ],
+        }),
+      })
+
+      const result = await adapter.resolveWikiPath({
+        path: ['Example Department', 'Annual Plans', '2026'],
+      })
+
+      expect(result).toEqual({
+        teamId: 'team-1',
+        spaceId: 'space-department',
+        pageId: 'wiki-plan-fallback',
+        title: '2026 Annual Plan Goals',
+        breadcrumb: ['Example Department', 'Department Wiki', 'Annual Plans', '2026 Annual Plan Goals'],
+      })
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        'https://ones.test/wiki/api/wiki/team/team-1/page/wiki-plan-fallback/detail',
+        { headers: { Authorization: 'Bearer test-access-token' } },
+      )
+    })
+
+    it('should resolve a uniquely close Wiki path without asking for confirmation', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          datas: {
+            page: [
+              {
+                fields: {
+                  page_uuid: 'wiki-plan-close',
+                  title: '2026年度计划',
+                  space_uuid: 'space-frontend',
+                  space_name: '前端开发部',
+                  archived: false,
+                },
+              },
+              {
+                fields: {
+                  page_uuid: 'wiki-plan-goals-close',
+                  title: '2026年度计划目标',
+                  space_uuid: 'space-frontend',
+                  space_name: '前端开发部',
+                  archived: false,
+                },
+              },
+            ],
+          },
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          uuid: 'wiki-plan-close',
+          title: '2026年度计划',
+          space_uuid: 'space-frontend',
+          space_name: '前端开发部',
+          ancestors: [],
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          uuid: 'wiki-plan-goals-close',
+          title: '2026年度计划目标',
+          space_uuid: 'space-frontend',
+          space_name: '前端开发部',
+          ancestors: [],
+        }),
+      })
+
+      const result = await adapter.resolveWikiPath({
+        path: ['前端部门', '2026年年度计划'],
+      })
+
+      expect(result).toEqual({
+        teamId: 'team-1',
+        spaceId: 'space-frontend',
+        pageId: 'wiki-plan-close',
+        title: '2026年度计划',
+        breadcrumb: ['前端开发部', '2026年度计划'],
+      })
+    })
+
+    it('should preserve fuzzy Wiki candidates when an exact path is not found', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          result: 'SUCCESS',
+          data: {
+            pages: [
+              {
+                fields: {
+                  id: 'wiki-plan-goals',
+                  title: '2026 Annual Plan Goals',
+                  spaceID: 'space-department',
+                  spaceName: 'Frontend Department',
+                  updatedTime: 1787305320,
+                },
+              },
+              {
+                fields: {
+                  id: 'wiki-plan',
+                  title: '2026 Annual Plan',
+                  spaceID: 'space-department',
+                  spaceName: 'Frontend Department',
+                  updatedTime: 1767225600,
+                },
+              },
+            ],
+          },
+        }),
+      })
+
+      const resolution = adapter.resolveWikiPath({
+        path: ['Frontend Team', '2026 Yearly Plan'],
+      })
+
+      await expect(resolution).rejects.toBeInstanceOf(WikiPathResolutionError)
+      await expect(resolution).rejects.toMatchObject({
+        reason: 'not_found',
+        requestedPath: ['Frontend Team', '2026 Yearly Plan'],
+        candidates: [
+          expect.objectContaining({
+            pageId: 'wiki-plan-goals',
+            breadcrumb: ['Frontend Department', '2026 Annual Plan Goals'],
+          }),
+          expect.objectContaining({
+            pageId: 'wiki-plan',
+            breadcrumb: ['Frontend Department', '2026 Annual Plan'],
+          }),
+        ],
+      })
+    })
+
+    it('should read Wiki metadata through the legacy detail GET after Open API returns 401', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 })
+      mockWikiContent('## Anonymous annual plan')
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          uuid: 'wiki-read-fallback',
+          title: 'Anonymous Annual Plan',
+          parent_uuid: 'wiki-parent-fallback',
+          space_uuid: 'space-fallback',
+          space_name: 'Example Department',
+          updated_time: 1767225600,
+          ancestors: [{ uuid: 'wiki-parent-fallback', title: 'Annual Plans', parent_uuid: '' }],
+        }),
+      })
+
+      const result = await adapter.getWikiPage({
+        pageId: 'wiki-read-fallback',
+        teamId: 'team-1',
+      })
+
+      expect(result).toMatchObject({
+        pageId: 'wiki-read-fallback',
+        spaceId: 'space-fallback',
+        title: 'Anonymous Annual Plan',
+        parentPageId: 'wiki-parent-fallback',
+        breadcrumb: ['Example Department', 'Annual Plans', 'Anonymous Annual Plan'],
+        content: '## Anonymous annual plan',
+      })
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/wiki/spaces/'))).toBe(false)
+    })
+
+    it('should list direct Wiki children from the documented page-tree Open API', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          result: 'SUCCESS',
+          data: {
+            pages: [
+              { id: 'wiki-parent-demo', title: 'Parent', spaceID: 'space-demo', parentID: '' },
+              { id: 'wiki-child-demo', title: 'Child', spaceID: 'space-demo', parentID: 'wiki-parent-demo' },
+              { id: 'wiki-grandchild-demo', title: 'Grandchild', spaceID: 'space-demo', parentID: 'wiki-child-demo' },
+            ],
+          },
+        }),
+      })
+
+      const result = await adapter.listWikiPageChildren({
+        pageId: 'wiki-parent-demo',
+        teamId: 'team-demo',
+        spaceId: 'space-demo',
+      })
+
+      expect(result).toEqual([expect.objectContaining({
+        pageId: 'wiki-child-demo',
+        breadcrumb: ['Parent', 'Child'],
+      })])
+    })
+
+    it('should always create through the product collaboration API', async () => {
+      mockLoginFlow()
+      mockProductWikiCreate()
+
+      const result = await adapter.createWikiPage({
+        teamId: 'team-demo',
+        spaceId: 'space-demo',
+        parentPageId: 'wiki-parent-demo',
+        title: 'Technical Sharing',
+        markdown: '',
+        idempotencyKey: 'mock-idempotency-key',
+      })
+
+      expect(result.pageId).toBe('wiki-created-product-demo')
+      const createCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/wiki/api/wiki/team/team-demo/online_pages/add'))
+      expect(createCall).toBeDefined()
+      expect(JSON.parse(String(createCall![1].body))).toEqual({
+        parent_uuid: 'wiki-parent-demo',
+        title: 'Technical Sharing',
+        space_uuid: 'space-demo',
+      })
+      expect((createCall![1].headers as Headers).get('Authorization')).toBe('Bearer test-access-token')
+      expect(mockReplaceOnesWikiDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ teamId: 'team-demo', documentId: 'wiki-document-demo', editorToken: 'editor-token-demo' }),
+        expect.any(Function),
+      )
+      const publishCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/online_page/wiki-draft-demo/publish'))
+      expect(publishCall).toBeDefined()
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/openapi/v2/wiki/pages'))).toBe(false)
+    })
+
+    it('should preserve a mock document and append one exact table row for update', async () => {
+      const document = {
+        'blocks': [{ id: 'table-demo', type: 'table', rows: 2, cols: 2, children: ['cell-a', 'cell-b', 'cell-c', 'cell-d'] }],
+        'cell-a': [{ id: 'text-a', type: 'text', text: [{ insert: 'Goal' }] }],
+        'cell-b': [{ id: 'text-b', type: 'text', text: [{ insert: 'Status' }] }],
+        'cell-c': [{ id: 'text-c', type: 'text', text: [{ insert: 'Example' }] }],
+        'cell-d': [{ id: 'text-d', type: 'text', text: [{ insert: 'Planned' }] }],
+        'comments': { keep: true },
+        'meta': { keep: true },
+      }
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-update-demo',
+          ref_uuid: 'wiki-document-demo',
+          title: 'Goals',
+          space_uuid: 'space-demo',
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ token: 'editor-token-demo' }),
+      })
+      let updatedDocument: Record<string, unknown> | undefined
+      mockReplaceOnesWikiDocument.mockImplementationOnce(async (_options, update) => {
+        updatedDocument = update(structuredClone(document))
+        return { snapshotVersion: 10, version: 11, changed: true }
+      })
+
+      const result = await adapter.updateWikiPage({
+        teamId: 'team-demo',
+        spaceId: 'space-demo',
+        pageId: 'wiki-update-demo',
+        baseline: { pageId: 'wiki-update-demo', version: '1', contentHash: 'mock-hash' },
+        operation: {
+          type: 'append_table_row',
+          tableHeaders: ['Goal', 'Status'],
+          row: { Goal: 'Improve example architecture', Status: 'Planned' },
+        },
+        idempotencyKey: 'mock-idempotency-key',
+      })
+
+      expect(result).toEqual(expect.objectContaining({
+        pageId: 'wiki-update-demo',
+        title: 'Goals',
+        version: '11',
+      }))
+      const blocks = updatedDocument?.blocks as Array<Record<string, unknown>>
+      expect(blocks[0].rows).toBe(3)
+      expect(blocks[0].children).toHaveLength(6)
+      expect(updatedDocument?.comments).toEqual({ keep: true })
+      expect(updatedDocument?.meta).toEqual({ keep: true })
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/openapi/v2/wiki/pages'))).toBe(false)
+    })
+
     it('should render tables from a short ONES wiki URL', async () => {
       mockLoginFlow()
       mockWikiContent(JSON.stringify({
@@ -534,6 +1062,40 @@ describe('onesAdapter', () => {
       expect(result.description).toContain('| --- | --- |')
       expect(result.description).toContain('| Mode | Enabled |')
       expect(result.description).not.toContain('{"blocks"')
+    })
+
+    it('should preserve ONES user mentions in wiki table cells', async () => {
+      mockLoginFlow()
+      mockWikiContent(JSON.stringify({
+        'blocks': [
+          { id: 'table', type: 'table', rows: 2, cols: 3, children: ['cell-1', 'cell-2', 'cell-3', 'cell-4', 'cell-5', 'cell-6'] },
+        ],
+        'cell-1': [{ id: 'header-goal', type: 'text', text: [{ insert: 'Goal' }] }],
+        'cell-2': [{ id: 'header-owner', type: 'text', text: [{ insert: 'Owner' }] }],
+        'cell-3': [{ id: 'header-status', type: 'text', text: [{ insert: 'Status' }] }],
+        'cell-4': [{ id: 'goal', type: 'text', text: [{ insert: 'Example change' }] }],
+        'cell-5': [{
+          id: 'owner',
+          type: 'text',
+          text: [{
+            insert: ' ',
+            attributes: {
+              id: 'mention-demo',
+              type: 'user',
+              text: '@Example Owner',
+              mentionId: 'user-demo',
+            },
+          }],
+        }],
+        'cell-6': [{ id: 'status', type: 'text', text: [{ insert: 'Planned' }] }],
+      }))
+
+      const result = await adapter.getRequirement({
+        id: 'https://ones.test/wiki#/team/team-mention-uuid/page/wiki-mention-uuid',
+      })
+
+      expect(result.description).toContain('| Goal | Owner | Status |')
+      expect(result.description).toContain('| Example change | @Example Owner | Planned |')
     })
 
     it('should preserve a merged ONES wiki table column as HTML', async () => {

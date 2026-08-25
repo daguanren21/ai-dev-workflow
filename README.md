@@ -106,6 +106,10 @@ Create `.requirements-mcp.json` in your project root:
         "type": "ones-pkce",
         "emailEnv": "ONES_ACCOUNT",
         "passwordEnv": "ONES_PASSWORD"
+      },
+      "openApiAuth": {
+        "type": "token",
+        "tokenEnv": "ONES_OPENAPI_TOKEN"
       }
     }
   },
@@ -123,12 +127,18 @@ Add to your `.mcp.json`:
       "args": ["ai-dev-requirements"],
       "env": {
         "ONES_ACCOUNT": "${ONES_ACCOUNT}",
-        "ONES_PASSWORD": "${ONES_PASSWORD}"
+        "ONES_PASSWORD": "${ONES_PASSWORD}",
+        "ONES_OPENAPI_TOKEN": "${ONES_OPENAPI_TOKEN}"
       }
     }
   }
 }
 ```
+
+`openApiAuth` is optional and independent from the internal `ones-pkce` product
+session. It is used for documented Wiki metadata and search requests when
+available. Wiki creates and updates always use the product session plus the live
+JSONv1 collaboration protocol, so they do not require a Personal API Key.
 
 #### MCP security boundaries
 

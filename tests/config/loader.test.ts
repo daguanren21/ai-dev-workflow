@@ -69,6 +69,10 @@ describe('config Loader', () => {
   })
 
   describe('loadConfigFromEnv', () => {
+    beforeEach(() => {
+      vi.stubEnv('ONES_OPENAPI_TOKEN', '')
+    })
+
     afterEach(() => {
       vi.unstubAllEnvs()
     })
@@ -85,6 +89,20 @@ describe('config Loader', () => {
       expect(config!.defaultSource).toBe('ones')
     })
 
+    it('should add the default independent Open API credential when ONES_OPENAPI_TOKEN is set', () => {
+      vi.stubEnv('ONES_API_BASE', 'https://ones.example.com')
+      vi.stubEnv('ONES_ACCOUNT', 'test@example.com')
+      vi.stubEnv('ONES_PASSWORD', 'secret')
+      vi.stubEnv('ONES_OPENAPI_TOKEN', 'openapi-secret')
+
+      const config = loadConfigFromEnv()
+
+      expect(config!.sources.ones?.openApiAuth).toEqual({
+        type: 'token',
+        tokenEnv: 'ONES_OPENAPI_TOKEN',
+      })
+    })
+
     it('should return null when env vars are missing', () => {
       vi.stubEnv('ONES_API_BASE', 'https://ones.example.com')
       // Missing ONES_ACCOUNT and ONES_PASSWORD
@@ -97,6 +115,7 @@ describe('config Loader', () => {
     beforeEach(() => {
       vi.stubEnv('TEST_EMAIL', 'test@example.com')
       vi.stubEnv('TEST_PASS', 'password123')
+      vi.stubEnv('ONES_OPENAPI_TOKEN', '')
     })
 
     afterEach(() => {
@@ -133,6 +152,25 @@ describe('config Loader', () => {
       expect(result.sources[0].type).toBe('ones')
       expect(result.sources[0].resolvedAuth.email).toBe('test@example.com')
       expect(result.config.defaultSource).toBe('ones')
+    })
+
+    it('should resolve an optional independent Open API token from a file config', () => {
+      vi.stubEnv('TEST_OPENAPI_TOKEN', 'openapi-secret')
+      const config = {
+        sources: {
+          ones: {
+            enabled: true,
+            apiBase: 'https://ones.example.com',
+            auth: { type: 'ones-pkce', emailEnv: 'TEST_EMAIL', passwordEnv: 'TEST_PASS' },
+            openApiAuth: { type: 'token', tokenEnv: 'TEST_OPENAPI_TOKEN' },
+          },
+        },
+      }
+      writeFileSync(join(testDir, '.requirements-mcp.json'), JSON.stringify(config))
+
+      const result = loadConfig(testDir)
+
+      expect(result.sources[0].resolvedOpenApiAuth).toEqual({ token: 'openapi-secret' })
     })
 
     it('should skip disabled sources from file', () => {
