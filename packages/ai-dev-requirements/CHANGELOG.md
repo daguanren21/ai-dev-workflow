@@ -1,5 +1,11 @@
 # ai-dev-requirements
 
+## 0.4.0
+
+### Minor Changes
+
+- [`f00e2b6`](https://github.com/daguanren21/ai-dev-workflow/commit/f00e2b6809a2a40026553a16799ce36c735ecbbb) Thanks [@daguanren21](https://github.com/daguanren21)! - Add ONES Wiki read, search, path resolution, and confirmed create/update support through the product collaboration protocol. Separate ONES authentication, task queries, content handling, planning, issue reads, writes, and testcase reads into focused modules, and strengthen environment parsing, external-content decoding, and remote-image address validation.
+
 ## 0.3.1
 
 ### Patch Changes
