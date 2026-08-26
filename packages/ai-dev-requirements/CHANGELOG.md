@@ -1,5 +1,11 @@
 # ai-dev-requirements
 
+## 0.5.0
+
+### Minor Changes
+
+- [`a3be17c`](https://github.com/daguanren21/ai-dev-workflow/commit/a3be17cf52b26f7c91c44f3915df39e8eccea2c4) Thanks [@daguanren21](https://github.com/daguanren21)! - Fix ONES Wiki live editing to use the native edit-token, collaborative JSON1, and publish lifecycle. Preserve native tables, ordered lists, links, and CSS-safe block IDs across full-document updates; add authenticated self-alias resolution, exact-title collision protection, verified empty-duplicate cleanup, and project-prefixed ONES work-item display IDs.
+
 ## 0.4.0
 
 ### Minor Changes
