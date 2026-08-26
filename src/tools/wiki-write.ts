@@ -10,7 +10,7 @@ const SourceSchema = z.string().trim().min(1).optional()
 const PathSchema = z.union([
   z.string().trim().min(1),
   z.array(z.string().trim().min(1)).min(1),
-])
+]).describe('Wiki path. Exact self-reference segments such as "我的", "我", "me", or "my" resolve the authenticated user through ONES token info without exposing the display name.')
 
 export const PrepareWikiCreateSchema = z
   .object({
@@ -39,6 +39,10 @@ const ReplaceTextSchema = z.object({
   find: z.string().min(1),
   replace: z.string(),
 })
+const ReplaceDocumentSchema = z.object({
+  type: z.literal('replace_document'),
+  markdown: z.string().trim().min(1),
+})
 
 export const PrepareWikiUpdateSchema = z.object({
   pageId: z.string().trim().min(1).optional(),
@@ -46,7 +50,7 @@ export const PrepareWikiUpdateSchema = z.object({
   path: PathSchema.optional(),
   teamId: z.string().trim().min(1).optional(),
   spaceId: z.string().trim().min(1).optional(),
-  operation: z.discriminatedUnion('type', [AppendBlocksSchema, AppendTableRowSchema, ReplaceTextSchema]),
+  operation: z.discriminatedUnion('type', [AppendBlocksSchema, AppendTableRowSchema, ReplaceTextSchema, ReplaceDocumentSchema]),
   source: SourceSchema,
 }).refine(value => [value.pageId, value.url, value.path].filter(Boolean).length === 1, 'Provide exactly one of pageId, url, or path')
 
@@ -76,6 +80,7 @@ const WikiUpdateOperationSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('append_blocks'), markdown: z.string() }),
   z.object({ type: z.literal('append_table_row'), tableHeaders: z.array(z.string()), row: z.record(z.string(), z.string()) }),
   z.object({ type: z.literal('replace_text'), find: z.string(), replace: z.string() }),
+  z.object({ type: z.literal('replace_document'), markdown: z.string() }),
 ])
 
 const WikiUpdateRequestSchema = z.object({
@@ -266,12 +271,35 @@ export async function handlePrepareWikiCreate(
   const spaceId = resolved?.spaceId ?? parent.spaceId
   if (!spaceId)
     throw new Error('The target space could not be verified')
+  const title = input.title.trim()
+  const titleCandidates = await adapter.searchWikiPages({
+    query: title,
+    teamId,
+    spaceId,
+    limit: 50,
+  })
+  const exactTitlePages = await Promise.all(
+    titleCandidates
+      .filter(candidate => candidate.title === title)
+      .map(candidate => adapter.getWikiPage({
+        pageId: candidate.pageId,
+        teamId: candidate.teamId,
+        spaceId: candidate.spaceId ?? spaceId,
+      })),
+  )
+  const siblingConflicts = exactTitlePages.filter(page => page.parentPageId === parent.pageId)
+  if (siblingConflicts.length) {
+    throw new Error(
+      `Wiki title already exists under the selected parent (${siblingConflicts.map(page => page.pageId).join(', ')}). `
+      + 'Ask the user to choose one action: edit the existing page, delete it and recreate, or create with a new title.',
+    )
+  }
 
   const requestWithoutKey = {
     teamId,
     spaceId,
     parentPageId: parent.pageId,
-    title: input.title.trim(),
+    title,
     markdown: input.markdown,
   }
   const operationHash = hashOperation({ kind: 'create', source: sourceType, ...requestWithoutKey, parentBaseline: baseline(parent) })
@@ -285,7 +313,7 @@ export async function handlePrepareWikiCreate(
   })
   const plan = {
     kind: 'create' as const,
-    targetBreadcrumb: [...parent.breadcrumb, input.title.trim()],
+    targetBreadcrumb: [...(resolved?.breadcrumb ?? parent.breadcrumb), input.title.trim()],
     request,
     parentBaseline: baseline(parent),
     operationHash,
@@ -343,7 +371,7 @@ export async function handlePrepareWikiUpdate(
   })
   const plan = {
     kind: 'update' as const,
-    targetBreadcrumb: page.breadcrumb,
+    targetBreadcrumb: resolved?.breadcrumb ?? page.breadcrumb,
     request,
     operationHash,
     approvalToken: approval.token,
@@ -353,7 +381,7 @@ export async function handlePrepareWikiUpdate(
     content: [{
       type: 'text' as const,
       text: [
-        `Prepared Wiki update for ${page.breadcrumb.join(' / ') || page.title}.`,
+        `Prepared Wiki update for ${plan.targetBreadcrumb.join(' / ') || page.title}.`,
         'No write was performed. Ask the user to confirm this exact operation immediately before apply.',
         `operationHash: ${plan.operationHash}`,
         `approvalToken: ${plan.approvalToken}`,

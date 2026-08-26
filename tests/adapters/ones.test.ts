@@ -49,22 +49,32 @@ function mockLoginFlow(options: { authorizeLocation?: string, directCode?: boole
         org: { org_uuid: 'org-1', name: 'Test Org' },
       }],
     }),
-    headers: new Headers(),
+    headers: new Headers({ 'set-cookie': 'sid=test-session; Path=/; HttpOnly' }),
   })
   // 3. authorize (302 redirect)
   mockFetch.mockResolvedValueOnce({
     ok: false,
     status: 302,
-    headers: new Headers({ location: options.authorizeLocation ?? 'https://ones.test/login?id=auth-req-1' }),
+    headers: new Headers({
+      'location': options.authorizeLocation ?? 'https://ones.test/login?id=auth-req-1',
+      'set-cookie': 'ones-region-uuid=region-1; Path=/',
+    }),
   })
   if (!options.directCode) {
     // 4. finalize
-    mockFetch.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('') })
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      headers: new Headers({ 'set-cookie': 'ones-org-uuid=org-1; Path=/' }),
+      text: () => Promise.resolve(''),
+    })
     // 5. callback (302 redirect with code)
     mockFetch.mockResolvedValueOnce({
       ok: false,
       status: 302,
-      headers: new Headers({ location: 'https://ones.test/callback?code=auth-code-1' }),
+      headers: new Headers({
+        'location': 'https://ones.test/callback?code=auth-code-1',
+        'set-cookie': 'ones-lt=locale-token; Path=/',
+      }),
     })
   }
   // 6. token exchange
@@ -75,6 +85,7 @@ function mockLoginFlow(options: { authorizeLocation?: string, directCode?: boole
       token_type: 'Bearer',
       expires_in: 3600,
     }),
+    headers: new Headers({ 'set-cookie': 'timezone=Asia%2FShanghai; Path=/' }),
   })
   // 7. fetch teams
   mockFetch.mockResolvedValueOnce({
@@ -770,6 +781,63 @@ describe('onesAdapter', () => {
       )
     })
 
+    it('should resolve the current-user Wiki alias through token info without exposing the display name', async () => {
+      const privateDisplayName = 'SENSITIVE_DISPLAY_NAME'
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ user: { name: privateDisplayName } }),
+      })
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          datas: {
+            page: [{
+              fields: {
+                page_uuid: 'wiki-personal-folder',
+                title: privateDisplayName,
+                space_uuid: 'space-frontend',
+                space_name: 'Example Department',
+                archived: false,
+              },
+            }],
+          },
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          uuid: 'wiki-personal-folder',
+          title: privateDisplayName,
+          space_uuid: 'space-frontend',
+          space_name: 'Example Department',
+          ancestors: [
+            { uuid: 'wiki-team-blog', title: 'Team Blog', parent_uuid: 'wiki-department' },
+            { uuid: 'wiki-department', title: 'Example Department', parent_uuid: '' },
+          ],
+        }),
+      })
+
+      const result = await adapter.resolveWikiPath({
+        path: ['Example Department', 'Team Blog', 'my'],
+      })
+
+      expect(result).toEqual({
+        teamId: 'team-1',
+        spaceId: 'space-frontend',
+        pageId: 'wiki-personal-folder',
+        title: 'my',
+        breadcrumb: ['Example Department', 'Team Blog', 'my'],
+      })
+      expect(JSON.stringify(result)).not.toContain(privateDisplayName)
+      expect(result.redactPrivateValues?.(`# ${privateDisplayName}`)).toBe('# my')
+      expect(mockFetch.mock.calls.find(call => String(call[0]).includes('/wiki/api/project/auth/token_info'))).toEqual([
+        'https://ones.test/wiki/api/project/auth/token_info',
+        { headers: { Authorization: 'Bearer test-access-token' } },
+      ])
+    })
+
     it('should resolve a uniquely close Wiki path without asking for confirmation', async () => {
       mockLoginFlow()
       mockFetch.mockResolvedValueOnce({ ok: false, status: 401 })
@@ -783,7 +851,7 @@ describe('onesAdapter', () => {
                   page_uuid: 'wiki-plan-close',
                   title: '2026年度计划',
                   space_uuid: 'space-frontend',
-                  space_name: '前端开发部',
+                  space_name: '示例研发部门',
                   archived: false,
                 },
               },
@@ -792,7 +860,7 @@ describe('onesAdapter', () => {
                   page_uuid: 'wiki-plan-goals-close',
                   title: '2026年度计划目标',
                   space_uuid: 'space-frontend',
-                  space_name: '前端开发部',
+                  space_name: '示例研发部门',
                   archived: false,
                 },
               },
@@ -806,7 +874,7 @@ describe('onesAdapter', () => {
           uuid: 'wiki-plan-close',
           title: '2026年度计划',
           space_uuid: 'space-frontend',
-          space_name: '前端开发部',
+          space_name: '示例研发部门',
           ancestors: [],
         }),
       })
@@ -816,13 +884,13 @@ describe('onesAdapter', () => {
           uuid: 'wiki-plan-goals-close',
           title: '2026年度计划目标',
           space_uuid: 'space-frontend',
-          space_name: '前端开发部',
+          space_name: '示例研发部门',
           ancestors: [],
         }),
       })
 
       const result = await adapter.resolveWikiPath({
-        path: ['前端部门', '2026年年度计划'],
+        path: ['示例研发部', '2026年年度计划'],
       })
 
       expect(result).toEqual({
@@ -830,7 +898,7 @@ describe('onesAdapter', () => {
         spaceId: 'space-frontend',
         pageId: 'wiki-plan-close',
         title: '2026年度计划',
-        breadcrumb: ['前端开发部', '2026年度计划'],
+        breadcrumb: ['示例研发部门', '2026年度计划'],
       })
     })
 
@@ -978,6 +1046,87 @@ describe('onesAdapter', () => {
       expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/openapi/v2/wiki/pages'))).toBe(false)
     })
 
+    it('should delete a verified Wiki page through the documented product endpoint', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+      })
+
+      const result = await adapter.deleteWikiPage({
+        teamId: 'team-demo',
+        spaceId: 'space-demo',
+        pageId: 'wiki-empty-duplicate',
+      })
+
+      expect(result).toEqual({ pageId: 'wiki-empty-duplicate', deleted: true })
+      const deleteCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/wiki/api/wiki/team/team-demo/space/space-demo/page/wiki-empty-duplicate/delete'))
+      expect(deleteCall).toBeDefined()
+      expect(deleteCall![1]).toMatchObject({ method: 'POST' })
+      expect((deleteCall![1].headers as Headers).get('Authorization')).toBe('Bearer test-access-token')
+    })
+
+    it('should update a ref-type-6 page with the native edit detail and token endpoints', async () => {
+      const document = {
+        blocks: [{ id: 'old-block', type: 'text', text: [{ insert: 'Old content' }] }],
+        comments: {},
+        meta: {},
+      }
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-update-demo',
+          ref_uuid: 'wiki-document-demo',
+          ref_type: 6,
+          title: 'Research',
+          space_uuid: 'space-demo',
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ token: 'native-edit-token' }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ page_uuid: 'wiki-update-demo' }),
+      })
+      let collaborationOptions: Record<string, unknown> | undefined
+      mockReplaceOnesWikiDocument.mockImplementationOnce(async (options, update) => {
+        collaborationOptions = options as unknown as Record<string, unknown>
+        update(structuredClone(document))
+        return { snapshotVersion: 10, version: 11, changed: true }
+      })
+
+      const result = await adapter.updateWikiPage({
+        teamId: 'team-demo',
+        spaceId: 'space-demo',
+        pageId: 'wiki-update-demo',
+        baseline: { pageId: 'wiki-update-demo', version: '1', contentHash: 'mock-hash' },
+        operation: { type: 'replace_document', markdown: '# Updated research' },
+        idempotencyKey: 'mock-idempotency-key',
+      })
+
+      expect(result).toEqual(expect.objectContaining({
+        pageId: 'wiki-update-demo',
+        title: 'Research',
+        version: '11',
+      }))
+      expect(collaborationOptions).toEqual(expect.objectContaining({
+        documentId: 'wiki-document-demo',
+        editorToken: 'native-edit-token',
+      }))
+      expect(mockFetch.mock.calls.some(call => String(call[0]).endsWith('/page/wiki-update-demo?action=edit'))).toBe(true)
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/online_page/wiki-update-demo/token?action=edit'))).toBe(true)
+      const publishCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/online_page/wiki-update-demo/publish'))
+      expect(JSON.parse(String(publishCall?.[1].body))).toEqual({ title: 'Research' })
+      expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/drafts/add'))).toBe(false)
+      expect(mockFetch.mock.calls.some(call => String(call[0]).endsWith('/online_page/wiki-update-demo/content'))).toBe(false)
+    })
+
     it('should preserve a mock document and append one exact table row for update', async () => {
       const document = {
         'blocks': [{ id: 'table-demo', type: 'table', rows: 2, cols: 2, children: ['cell-a', 'cell-b', 'cell-c', 'cell-d'] }],
@@ -997,6 +1146,24 @@ describe('onesAdapter', () => {
           ref_uuid: 'wiki-document-demo',
           title: 'Goals',
           space_uuid: 'space-demo',
+          version: 1,
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-online-draft-demo',
+          ref_uuid: 'wiki-draft-document-demo',
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-online-draft-demo',
+          ref_uuid: 'wiki-draft-document-demo',
+          from_version: -1,
         }),
       })
       mockFetch.mockResolvedValueOnce({
@@ -1004,8 +1171,30 @@ describe('onesAdapter', () => {
         status: 200,
         json: () => Promise.resolve({ token: 'editor-token-demo' }),
       })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-online-draft-demo',
+          ref_uuid: 'wiki-draft-document-demo',
+          page_uuid: 'wiki-update-demo',
+          content: 'serialized-draft-content',
+          status: 2,
+          from_version: -1,
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          page_uuid: 'wiki-update-demo',
+          title: 'Goals',
+        }),
+      })
+      let collaborationOptions: Record<string, unknown> | undefined
       let updatedDocument: Record<string, unknown> | undefined
       mockReplaceOnesWikiDocument.mockImplementationOnce(async (_options, update) => {
+        collaborationOptions = _options as unknown as Record<string, unknown>
         updatedDocument = update(structuredClone(document))
         return { snapshotVersion: 10, version: 11, changed: true }
       })
@@ -1028,12 +1217,113 @@ describe('onesAdapter', () => {
         title: 'Goals',
         version: '11',
       }))
+      const pageDetailCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/page/wiki-update-demo?action=edit'))
+      expect(pageDetailCall).toBeDefined()
+      const draftDetailCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/space/space-demo/draft/wiki-online-draft-demo'))
+      expect(draftDetailCall).toBeDefined()
+      const draftCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/space/space-demo/drafts/add'))
+      expect(JSON.parse(String(draftCall?.[1].body))).toEqual({
+        page_uuid: 'wiki-update-demo',
+        status: 2,
+        title: 'Goals',
+      })
+      const publishCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/space/space-demo/draft/wiki-online-draft-demo/update'))
+      expect(JSON.parse(String(publishCall?.[1].body))).toEqual(expect.objectContaining({
+        page_uuid: 'wiki-update-demo',
+        content: 'serialized-draft-content',
+        from_version: 1,
+        is_published: true,
+        is_forced: true,
+      }))
+      const tokenCall = mockFetch.mock.calls.find(call => String(call[0]).includes('/token?action=edit'))
+      expect(String(tokenCall?.[0])).toContain('/online_draft/wiki-online-draft-demo/token?action=edit')
+      expect(collaborationOptions).toEqual(expect.objectContaining({ documentId: 'wiki-draft-document-demo' }))
       const blocks = updatedDocument?.blocks as Array<Record<string, unknown>>
       expect(blocks[0].rows).toBe(3)
       expect(blocks[0].children).toHaveLength(6)
       expect(updatedDocument?.comments).toEqual({ keep: true })
       expect(updatedDocument?.meta).toEqual({ keep: true })
       expect(mockFetch.mock.calls.some(call => String(call[0]).includes('/openapi/v2/wiki/pages'))).toBe(false)
+    })
+
+    it('should publish a legacy page draft as HTML without collaboration WebSocket', async () => {
+      mockLoginFlow()
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-update-demo',
+          ref_uuid: 'wiki-document-demo',
+          draft_uuid: 'wiki-legacy-draft-demo',
+          title: 'Research',
+          space_uuid: 'space-demo',
+          version: 1,
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          uuid: 'wiki-legacy-draft-demo',
+          ref_uuid: 'wiki-legacy-document-demo',
+          page_uuid: 'wiki-update-demo',
+          content: '<p>Old content</p>',
+          status: 2,
+          updated_time: 1,
+          from_version: -1,
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          page_uuid: 'wiki-update-demo',
+          updated_time: 2,
+        }),
+      })
+
+      const result = await adapter.updateWikiPage({
+        teamId: 'team-demo',
+        spaceId: 'space-demo',
+        pageId: 'wiki-update-demo',
+        baseline: { pageId: 'wiki-update-demo', version: '1', contentHash: 'mock-hash' },
+        operation: {
+          type: 'replace_document',
+          markdown: [
+            '| Version | Status |',
+            '| --- | --- |',
+            '| v3 | Supported |',
+            '',
+            '1. First',
+            '2. Second',
+            '',
+            '- [Guide](https://docs.example.test/guide)',
+          ].join('\n'),
+        },
+        idempotencyKey: 'mock-idempotency-key',
+      })
+
+      expect(result).toEqual(expect.objectContaining({
+        pageId: 'wiki-update-demo',
+        title: 'Research',
+        version: '2',
+      }))
+      expect(mockReplaceOnesWikiDocument).not.toHaveBeenCalled()
+      const publishCall = mockFetch.mock.calls.find(call => String(call[0]).endsWith('/space/space-demo/draft/wiki-legacy-draft-demo/update'))
+      const publishHeaders = publishCall?.[1].headers as Headers
+      expect(publishHeaders.get('Ones-Auth-Token')).toBe('test-sid')
+      expect(publishHeaders.get('Ones-User-Id')).toBe('auth-user-1')
+      expect(publishHeaders.get('Referer')).toBe('https://ones.test')
+      expect(publishHeaders.get('Cookie')).toContain('sid=test-session')
+      expect(publishHeaders.get('Cookie')).toContain('ones-region-uuid=region-1')
+      expect(publishHeaders.get('Cookie')).toContain('ones-org-uuid=org-1')
+      expect(publishHeaders.get('Cookie')).toContain('ones-lt=test-access-token')
+      expect(publishHeaders.get('Cookie')).toContain('timezone=Asia%2FShanghai')
+      const body = JSON.parse(String(publishCall?.[1].body))
+      expect(body.content).toContain('<table style="width:100%">')
+      expect(body.content).toContain('<ol start="1"><li>First</li><li>Second</li></ol>')
+      expect(body.content).toContain('<a href="https://docs.example.test/guide"')
+      expect(body).toMatchObject({ from_version: 1, is_published: true, is_forced: true })
     })
 
     it('should render tables from a short ONES wiki URL', async () => {
@@ -1827,6 +2117,7 @@ describe('onesAdapter', () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({
         descriptionText: '需求详情',
+        project: { uuid: 'project-demo', name: 'Anonymous Project' },
         relatedTasks: [
           {
             key: 'task-late',
@@ -1868,7 +2159,6 @@ describe('onesAdapter', () => {
         ok: true,
         json: () => Promise.resolve({
           display_id: 'DEMO-1001',
-          project_identifier: 'DEMO',
           version: 'v8',
           updated_at: '2026-08-17T00:00:00Z',
         }),
@@ -1876,7 +2166,16 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          display_id: 'DEMO-2002',
+          data: {
+            buckets: [{
+              projects: [{ uuid: 'project-demo', name: 'Anonymous Project', identifier: 'DEMO' }],
+            }],
+          },
+        }),
+      })
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
           desc: '<p>后续任务详情</p>',
           field_values: [
             { field_uuid: 'field027', value: '2026-08-20' },
@@ -1887,7 +2186,6 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          display_id: 'DEMO-2001',
           description_text: '前置任务详情',
           plan_start_date: '2026-08-18',
           plan_end_date: '2026-08-19',
@@ -1896,7 +2194,6 @@ describe('onesAdapter', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({
-          display_id: 'DEMO-2003',
           desc: '<p>已完成任务详情</p>',
         }),
       })

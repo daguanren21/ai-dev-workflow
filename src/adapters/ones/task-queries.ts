@@ -11,7 +11,7 @@ export const TASK_DETAIL_QUERY = `
       priority { value }
       assign { uuid name }
       owner { uuid name }
-      project { uuid name }
+      project { uuid name identifier }
       parent { uuid number issueType { uuid name } }
       relatedTasks {
         key uuid number name
@@ -22,6 +22,7 @@ export const TASK_DETAIL_QUERY = `
         subIssueType { uuid name detailType }
         status { uuid name category }
         assign { uuid name }
+        project { uuid name identifier }
       }
       relatedWikiPages {
         uuid title referenceType subReferenceType errorMessage

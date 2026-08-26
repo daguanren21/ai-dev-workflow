@@ -1,6 +1,6 @@
 import type { SourceConfig } from '../types/config'
 import type { AddManhourResult, ApplyRequirementDecompositionResult, IssueDetail, PendingWorkItemsResult, RelatedIssue, Requirement, RequirementDecompositionBaseline, RequirementDecompositionContext, RequirementDecompositionRelation, RequirementTaskCreateOperation, SearchResult, SourceType, TestCaseResult, UpdateTaskPlanDatesResult } from '../types/requirement'
-import type { WikiCreateRequest, WikiPage, WikiPageChildrenParams, WikiPageLocator, WikiPageSearchParams, WikiPageSummary, WikiPathResolution, WikiPathResolveParams, WikiUpdateRequest, WikiWriteResult } from '../types/wiki'
+import type { WikiCreateRequest, WikiDeleteRequest, WikiDeleteResult, WikiPage, WikiPageChildrenParams, WikiPageLocator, WikiPageSearchParams, WikiPageSummary, WikiPathResolution, WikiPathResolveParams, WikiUpdateRequest, WikiWriteResult } from '../types/wiki'
 import type { RemoteImageTrust } from '../utils/safe-image'
 
 export interface GetRequirementParams {
@@ -145,5 +145,10 @@ export abstract class BaseAdapter {
   /** Production Wiki writes stay disabled until the exact provider endpoint is verified. */
   async updateWikiPage(_params: WikiUpdateRequest): Promise<WikiWriteResult> {
     throw new Error(`${this.sourceType}: Wiki update endpoint is not verified`)
+  }
+
+  /** Production Wiki deletes stay disabled until the exact provider endpoint is verified. */
+  async deleteWikiPage(_params: WikiDeleteRequest): Promise<WikiDeleteResult> {
+    throw new Error(`${this.sourceType}: Wiki delete endpoint is not verified`)
   }
 }

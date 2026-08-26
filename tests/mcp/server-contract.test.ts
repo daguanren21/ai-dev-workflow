@@ -47,6 +47,7 @@ const adapter = {
     title: 'Personal Blog',
     breadcrumb: ['Example Department', 'Home', 'Personal Blog'],
   }),
+  searchWikiPages: vi.fn().mockResolvedValue([]),
   getWikiPage: vi.fn().mockResolvedValue({
     pageId: 'page-demo-parent',
     teamId: 'team-demo-1',
@@ -104,6 +105,7 @@ describe('requirements MCP contract', () => {
       expect(names).toContain('apply_wiki_create')
       expect(names).toContain('prepare_wiki_update')
       expect(names).toContain('apply_wiki_update')
+      expect(names).toContain('delete_empty_wiki_duplicates')
       expect(names).not.toContain('get_requirement')
 
       const brief = result.tools.find(tool => tool.name === 'get_grilling_brief')
@@ -116,6 +118,7 @@ describe('requirements MCP contract', () => {
       const prepareWikiCreate = result.tools.find(tool => tool.name === 'prepare_wiki_create')
       const prepareWikiUpdate = result.tools.find(tool => tool.name === 'prepare_wiki_update')
       const applyWikiUpdate = result.tools.find(tool => tool.name === 'apply_wiki_update')
+      const deleteWikiDuplicates = result.tools.find(tool => tool.name === 'delete_empty_wiki_duplicates')
       expect(inspectDecomposition?.annotations?.readOnlyHint).toBe(true)
       expect(pendingWorkItems?.annotations?.readOnlyHint).toBe(true)
       expect(prepareDecomposition?.annotations?.readOnlyHint).toBe(true)
@@ -130,6 +133,11 @@ describe('requirements MCP contract', () => {
       })
       expect(prepareWikiUpdate?.annotations?.readOnlyHint).toBe(true)
       expect(applyWikiUpdate?.annotations).toMatchObject({
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      })
+      expect(deleteWikiDuplicates?.annotations).toMatchObject({
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,

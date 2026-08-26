@@ -11,6 +11,7 @@ export interface OnesTaskPlanningOptions {
   api: OnesApiClient
   getRequirement: (id: string) => Promise<Requirement>
   fetchTaskInfo: (taskUuid: string) => Promise<Record<string, unknown>>
+  resolveProjectIdentifier: (projectUuid: string) => Promise<string | null>
 }
 
 export class OnesTaskPlanning {
@@ -93,8 +94,13 @@ export class OnesTaskPlanning {
       throw new TypeError('ONES: Standalone wiki pages cannot be decomposed into requirement tasks')
     const parsedDisplayId = parseDisplayId(params.requirementId)
     const requirementInfo = await this.options.fetchTaskInfo(workItem.id)
-    const projectIdentifier = parsedDisplayId?.identifier.toUpperCase()
+    let projectIdentifier: string | null = parsedDisplayId?.identifier
       ?? firstString(requirementInfo, ['projectIdentifier', 'project_identifier'])
+      ?? raw.project?.identifier
+      ?? null
+    if (!projectIdentifier && raw.project?.uuid)
+      projectIdentifier = await this.options.resolveProjectIdentifier(raw.project.uuid)
+    projectIdentifier = projectIdentifier?.toUpperCase() ?? null
     const displayId = firstString(requirementInfo, ['displayId', 'display_id'])
       ?? (projectIdentifier ? `${projectIdentifier}-${raw.number}` : `#${raw.number}`)
     const relatedTasks = (raw.relatedTasks ?? [])

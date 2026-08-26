@@ -193,10 +193,11 @@ export function toRequirement(
   description = '',
   attachments: Attachment[] = [],
 ): Requirement {
+  const displayId = taskDisplayId({}, task, task.project?.identifier?.toUpperCase() ?? null)
   return {
     id: task.uuid,
     source: 'ones',
-    title: `#${task.number} ${task.name}`,
+    title: `${displayId} ${task.name}`,
     description,
     status: mapOnesStatus(task.status?.category ?? 'to_do'),
     priority: mapOnesPriority(task.priority?.value ?? 'normal'),

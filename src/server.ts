@@ -14,6 +14,7 @@ import { handleListSources } from './tools/list-sources'
 import { ApplyRequirementDecompositionSchema, handleApplyRequirementDecomposition, handleInspectRequirementDecomposition, handlePrepareRequirementDecomposition, InspectRequirementDecompositionSchema, PrepareRequirementDecompositionSchema, RequirementDecompositionApprovalStore } from './tools/requirement-decomposition'
 import { handleSearchRequirements, SearchRequirementsSchema } from './tools/search-requirements'
 import { handleUpdateTaskPlanDates, UpdateTaskPlanDatesSchema } from './tools/update-task-plan-dates'
+import { DeleteEmptyWikiDuplicatesOutputSchema, DeleteEmptyWikiDuplicatesSchema, handleDeleteEmptyWikiDuplicates } from './tools/wiki-delete'
 import { ExportOnesWikiTreeSchema, GetOnesWikiPageSchema, handleExportOnesWikiTree, handleGetOnesWikiPage, handleLookupEnvironmentAccess, handleSearchOnesWiki, LookupEnvironmentAccessSchema, SearchOnesWikiSchema } from './tools/wiki-read'
 import { ApplyWikiWriteSchema, handleApplyWikiWrite, handlePrepareWikiCreate, handlePrepareWikiUpdate, PrepareWikiCreateOutputSchema, PrepareWikiCreateSchema, PrepareWikiUpdateOutputSchema, PrepareWikiUpdateSchema, WikiWriteApprovalStore, WikiWriteResultOutputSchema } from './tools/wiki-write'
 import { sanitizePublicError } from './utils/external-content'
@@ -98,7 +99,7 @@ export function createRequirementsServer(
     'get_ones_wiki_page',
     {
       title: 'Get ONES Wiki Page',
-      description: 'Read one ONES Wiki page as Markdown by page ID, URL, or hierarchical path. Prefer path for requests like "Department/Annual Plans/2026". Unique confidently close paths are corrected automatically; unresolved or ambiguous paths return candidate pages for confirmation. Sensitive values are redacted by default; revealing them requires an explicit argument based on an explicit user request.',
+      description: 'Read one ONES Wiki page as Markdown by page ID, URL, or hierarchical path. Prefer path for requests like "Department/Annual Plans/2026". Exact self-reference path segments such as "我的", "我", "me", or "my" resolve the authenticated user through ONES token info; never infer or expose the display name from local Git or machine configuration. Unique confidently close paths are corrected automatically; unresolved or ambiguous paths return candidate pages for confirmation. Sensitive values are redacted by default; revealing them requires an explicit argument based on an explicit user request.',
       inputSchema: GetOnesWikiPageSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -170,7 +171,7 @@ export function createRequirementsServer(
     'prepare_wiki_create',
     {
       title: 'Prepare ONES Wiki Create',
-      description: 'Resolve an exact parent page and prepare one exact Wiki create operation. Never writes. Returns a one-time 30-minute approval token.',
+      description: 'Resolve an exact parent page and prepare one exact Wiki create operation. If a sibling page already has the requested title, fail closed and require the user to choose: edit the existing page, delete it and recreate, or use a new title. Exact self-reference path segments such as "我的", "我", "me", or "my" resolve the authenticated user through ONES token info; never infer or expose the display name from local Git or machine configuration. Never writes. Returns a one-time 30-minute approval token.',
       inputSchema: PrepareWikiCreateSchema,
       outputSchema: PrepareWikiCreateOutputSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -213,7 +214,7 @@ export function createRequirementsServer(
     'prepare_wiki_update',
     {
       title: 'Prepare ONES Wiki Update',
-      description: 'Prepare an exact minimal Wiki update, including exact table-row targeting. Never writes. Ambiguous pages, tables, or text matches fail closed.',
+      description: 'Prepare an exact minimal Wiki update, including exact table-row targeting. Exact self-reference path segments such as "我的", "我", "me", or "my" resolve the authenticated user through ONES token info; never infer or expose the display name from local Git or machine configuration. Never writes. Ambiguous pages, tables, or text matches fail closed.',
       inputSchema: PrepareWikiUpdateSchema,
       outputSchema: PrepareWikiUpdateOutputSchema,
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -244,6 +245,29 @@ export function createRequirementsServer(
           defaultSource,
           writesEnabled: wikiWritesEnabled(sourceType),
           expectedKind: 'update',
+        })
+      }
+      catch (err) {
+        return toolError(err)
+      }
+    },
+  )
+
+  server.registerTool(
+    'delete_empty_wiki_duplicates',
+    {
+      title: 'Delete Empty ONES Wiki Duplicates',
+      description: 'Delete only explicitly confirmed, title-only duplicate sibling pages while retaining one verified page with a body. Revalidates every page immediately before deletion and fails closed if any duplicate contains additional content.',
+      inputSchema: DeleteEmptyWikiDuplicatesSchema,
+      outputSchema: DeleteEmptyWikiDuplicatesOutputSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    },
+    async (params) => {
+      try {
+        const sourceType = params.source ?? defaultSource
+        return await handleDeleteEmptyWikiDuplicates(params, adapters, {
+          defaultSource,
+          writesEnabled: wikiWritesEnabled(sourceType),
         })
       }
       catch (err) {

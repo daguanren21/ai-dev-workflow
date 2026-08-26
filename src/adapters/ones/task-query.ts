@@ -1,6 +1,6 @@
 import type { SourceConfig } from '../../types/config'
 import type { AddManhourResult, ApplyRequirementDecompositionResult, IssueDetail, PendingWorkItemsResult, RelatedIssue, Requirement, RequirementDecompositionContext, SearchResult, SourceType, TestCaseResult, UpdateTaskPlanDatesResult } from '../../types/requirement'
-import type { WikiCreateRequest, WikiPage, WikiPageChildrenParams, WikiPageLocator, WikiPageSearchParams, WikiPageSummary, WikiPathResolution, WikiPathResolveParams, WikiUpdateRequest, WikiWriteResult } from '../../types/wiki'
+import type { WikiCreateRequest, WikiDeleteRequest, WikiDeleteResult, WikiPage, WikiPageChildrenParams, WikiPageLocator, WikiPageSearchParams, WikiPageSummary, WikiPathResolution, WikiPathResolveParams, WikiUpdateRequest, WikiWriteResult } from '../../types/wiki'
 import type { RemoteImageTrust } from '../../utils/safe-image'
 import type { AddManhourParams, CreateRequirementDecompositionParams, GetIssueDetailParams, GetRelatedIssuesParams, GetRequirementDecompositionContextParams, GetRequirementParams, GetTestcasesParams, SearchRequirementsParams, UpdateTaskPlanDatesParams } from '../base'
 import type { OnesProjectNode, OnesRelatedActivity, OnesSession, OnesTaskNode, OnesTaskRef } from './types'
@@ -209,7 +209,6 @@ export class OnesTaskAdapter extends BaseAdapter {
     this.wikiProductWriter = new OnesWikiProductWriter({
       apiBase: config.apiBase,
       getSession: () => this.login(),
-      fetchPageDetail: (pageId, teamId) => this.wikiReader.fetchPageDetail(pageId, teamId, true),
       invalidateTree: (teamId, spaceId) => this.wikiReader.invalidateTree(teamId, spaceId),
     })
     this.content = new OnesTaskContent({
@@ -226,6 +225,10 @@ export class OnesTaskAdapter extends BaseAdapter {
       api: this.api,
       getRequirement: id => this.getRequirement({ id }),
       fetchTaskInfo: taskUuid => this.fetchTaskInfo(taskUuid),
+      resolveProjectIdentifier: async (projectUuid) => {
+        const project = (await this.fetchProjects()).find(candidate => candidate.uuid === projectUuid)
+        return project?.identifier?.toUpperCase() ?? null
+      },
     })
     this.issueReader = new OnesIssueReader({
       api: this.api,
@@ -530,6 +533,10 @@ export class OnesTaskAdapter extends BaseAdapter {
 
   async updateWikiPage(params: WikiUpdateRequest): Promise<WikiWriteResult> {
     return this.wikiProductWriter.update(params)
+  }
+
+  async deleteWikiPage(params: WikiDeleteRequest): Promise<WikiDeleteResult> {
+    return this.wikiProductWriter.delete(params)
   }
 
   /**

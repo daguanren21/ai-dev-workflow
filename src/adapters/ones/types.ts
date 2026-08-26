@@ -47,6 +47,7 @@ export interface OnesRelatedTask {
   subIssueType?: { uuid: string, name: string, detailType?: number } | null
   status: { uuid: string, name: string, category?: string }
   assign?: { uuid: string, name: string } | null
+  project?: { uuid: string, name: string, identifier?: string }
 }
 
 export interface OnesRelatedActivity {
@@ -69,5 +70,8 @@ export interface OnesSession {
   orgUuid: string
   userUuid: string
   userName: string
+  cookieHeader: string
+  legacyAuthToken: string
+  legacyUserId: string
   expiresAt: number
 }

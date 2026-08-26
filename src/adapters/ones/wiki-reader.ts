@@ -13,6 +13,16 @@ interface OnesWikiContentResponse {
 
 export interface OnesWikiPageDetailResponse {
   ref_uuid?: string
+  draft_uuid?: string
+  draftUuid?: string
+  draft_ref_uuid?: string
+  draftRefUuid?: string
+  online_draft_uuid?: string
+  onlineDraftUuid?: string
+  online_draft_ref_uuid?: string
+  onlineDraftRefUuid?: string
+  draft?: { uuid?: string, ref_uuid?: string }
+  online_draft?: { uuid?: string, ref_uuid?: string }
   uuid?: string
   title?: string
   name?: string
@@ -92,6 +102,38 @@ export interface RenderedWikiContent {
   attachments: Attachment[]
 }
 
+interface OnesWikiTokenInfoResponse {
+  user?: { name?: unknown }
+  data?: {
+    user?: { name?: unknown }
+    name?: unknown
+  }
+  name?: unknown
+  user_name?: unknown
+  userName?: unknown
+}
+
+const CURRENT_USER_PATH_ALIASES: Record<string, true> = {
+  'i': true,
+  'me': true,
+  'mine': true,
+  'my': true,
+  'myself': true,
+  'current user': true,
+  'current-user': true,
+  'current_user': true,
+  '我': true,
+  '我的': true,
+  '本人': true,
+  '当前用户': true,
+  '当前账号': true,
+  '自己': true,
+}
+
+function currentUserPathAlias(segment: string): string | null {
+  const trimmed = segment.trim()
+  return CURRENT_USER_PATH_ALIASES[trimmed.toLocaleLowerCase()] ? trimmed : null
+}
 export interface OnesWikiReaderSession {
   accessToken: string
   teamUuid: string
@@ -224,11 +266,43 @@ function segmentSimilarity(left: string, right: string): number {
 
 export class OnesWikiReader {
   private readonly treeCache = new Map<string, { expiresAt: number, pages: OnesOpenApiWikiPage[] }>()
+  private currentUserNameRequest: Promise<string> | null = null
 
   constructor(private readonly options: OnesWikiReaderOptions) {}
 
   invalidateTree(teamId: string, spaceId: string): void {
     this.treeCache.delete(`${teamId}:${spaceId}`)
+  }
+
+  private async fetchCurrentUserName(): Promise<string> {
+    const session = await this.options.getSession()
+    const response = await fetch(new URL('/wiki/api/project/auth/token_info', this.options.apiBase).toString(), {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    })
+    if (!response.ok)
+      throw new Error(`ONES Wiki token info error: ${response.status}`)
+    const payload = await response.json() as OnesWikiTokenInfoResponse
+    const name = firstNonEmptyString(
+      payload.user?.name,
+      payload.data?.user?.name,
+      payload.data?.name,
+      payload.name,
+      payload.user_name,
+      payload.userName,
+    )
+    if (!name)
+      throw new Error('ONES Wiki token info did not include a resolvable current account')
+    return name
+  }
+
+  private currentUserName(): Promise<string> {
+    if (!this.currentUserNameRequest) {
+      this.currentUserNameRequest = this.fetchCurrentUserName().catch((error) => {
+        this.currentUserNameRequest = null
+        throw error
+      })
+    }
+    return this.currentUserNameRequest
   }
 
   private async openApi<T>(apiPath: string): Promise<T> {
@@ -528,9 +602,23 @@ export class OnesWikiReader {
   }
 
   async resolvePath(params: WikiPathResolveParams): Promise<WikiPathResolution> {
-    const path = params.path.map(segment => segment.trim()).filter(Boolean)
-    if (!path.length)
+    const requestedPath = params.path.map(segment => segment.trim()).filter(Boolean)
+    if (!requestedPath.length)
       throw new Error('ONES: Wiki path is empty')
+    const currentUserAlias = requestedPath.map(currentUserPathAlias).find((alias): alias is string => alias !== null) ?? null
+    const currentUserName = currentUserAlias ? await this.currentUserName() : null
+    const path = currentUserName
+      ? requestedPath.map(segment => currentUserPathAlias(segment) ? currentUserName : segment)
+      : requestedPath
+    const redactCurrentUser = (page: WikiPageSummary): WikiPageSummary => {
+      if (!currentUserName || !currentUserAlias)
+        return page
+      return {
+        ...page,
+        title: page.title === currentUserName ? currentUserAlias : page.title,
+        breadcrumb: page.breadcrumb.map(segment => segment === currentUserName ? currentUserAlias : segment),
+      }
+    }
     const candidates = await this.search({ query: path.at(-1)!, teamId: params.teamId, spaceId: params.spaceId, limit: 200 })
     const requestedTitle = path.at(-1)!
     const titleCandidates = candidates.filter(page => page.title === requestedTitle || page.title.startsWith(requestedTitle) || segmentSimilarity(requestedTitle, page.title) >= MIN_TITLE_CANDIDATE_SIMILARITY)
@@ -572,21 +660,39 @@ export class OnesWikiReader {
       }
     }
     if (matches.length > 1)
-      throw new WikiPathResolutionError('ambiguous', path, matches)
+      throw new WikiPathResolutionError('ambiguous', requestedPath, matches.map(redactCurrentUser))
     let match = matches[0]
     if (!match && fuzzy.length) {
       fuzzy.sort((left, right) => right.score - left.score)
       const competing = fuzzy.filter(candidate => fuzzy[0].score - candidate.score < PATH_MATCH_MARGIN)
       if (competing.length > 1)
-        throw new WikiPathResolutionError('ambiguous', path, competing.map(candidate => candidate.page))
+        throw new WikiPathResolutionError('ambiguous', requestedPath, competing.map(candidate => redactCurrentUser(candidate.page)))
       match = fuzzy[0].page
     }
     if (!match) {
       const inspectedIds = new Set(inspected.map(page => page.pageId))
-      throw new WikiPathResolutionError('not_found', path, [...inspected, ...candidates.filter(page => !inspectedIds.has(page.pageId))])
+      throw new WikiPathResolutionError(
+        'not_found',
+        requestedPath,
+        [...inspected, ...candidates.filter(page => !inspectedIds.has(page.pageId))].map(redactCurrentUser),
+      )
     }
     if (!match.spaceId)
       throw new Error('ONES: Wiki space ID could not be verified')
-    return { teamId: match.teamId, spaceId: match.spaceId, pageId: match.pageId, title: match.title, breadcrumb: match.breadcrumb }
+    const publicMatch = redactCurrentUser(match)
+    const resolution: WikiPathResolution = {
+      teamId: match.teamId,
+      spaceId: match.spaceId,
+      pageId: match.pageId,
+      title: publicMatch.title,
+      breadcrumb: publicMatch.breadcrumb,
+    }
+    if (currentUserName && currentUserAlias) {
+      Object.defineProperty(resolution, 'redactPrivateValues', {
+        enumerable: false,
+        value: (value: string) => value.split(currentUserName).join(currentUserAlias),
+      })
+    }
+    return resolution
   }
 }

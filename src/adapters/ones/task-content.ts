@@ -4,7 +4,7 @@ import type { RemoteImageTrust } from '../../utils/safe-image'
 import type { OnesRelatedActivity, OnesSession, OnesTaskNode } from './types'
 import type { OnesWikiReader } from './wiki-reader'
 import { workItemKindLabel } from '../../utils/ones-issue-kind'
-import { getTaskDetailText, parseDisplayId, toRequirement } from './task-helpers'
+import { getTaskDetailText, parseDisplayId, taskDisplayId, toRequirement } from './task-helpers'
 import { attachmentNameFromPath, mimeTypeFromFileName } from './wiki-document'
 import { parseOnesWikiPageRoute } from './wiki-reader'
 
@@ -261,8 +261,10 @@ export class OnesTaskContent {
       containsInlineTaskImages(task) ? this.getTaskImageAttachments(task) : Promise.resolve([]),
     ])
 
+    const projectIdentifier = task.project?.identifier?.toUpperCase() ?? null
+    const displayId = taskDisplayId({}, task, projectIdentifier)
     const parts = [
-      `# #${task.number} ${task.name}`,
+      `# ${displayId} ${task.name}`,
       '',
       `- **Type**: ${task.issueType?.name ?? 'Unknown'}`,
       '- **Work Item Kind**: requirement',
@@ -277,7 +279,7 @@ export class OnesTaskContent {
     if (task.relatedTasks?.length) {
       parts.push('', '## Related Tasks')
       for (const related of task.relatedTasks)
-        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${related.assign?.name ?? 'Unassigned'}`)
+        parts.push(`- ${taskDisplayId({}, related, related.project?.identifier?.toUpperCase() ?? projectIdentifier)} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${related.assign?.name ?? 'Unassigned'}`)
     }
     if (relatedActivities.length) {
       parts.push('', '## Related Work Items')
@@ -293,7 +295,7 @@ export class OnesTaskContent {
     if (task.parent?.uuid) {
       parts.push('', '## Parent Task', `- UUID: ${task.parent.uuid}`)
       if (task.parent.number)
-        parts.push(`- Number: #${task.parent.number}`)
+        parts.push(`- Number: ${projectIdentifier ? `${projectIdentifier}-${task.parent.number}` : `#${task.parent.number}`}`)
     }
     if (wikiContents.length > 0) {
       parts.push('', '---', '', '## Requirement Documents')
@@ -324,8 +326,10 @@ export class OnesTaskContent {
 
   buildWorkItemSummary(task: OnesTaskNode, kind: OnesWorkItemKind): Requirement {
     const nextTool = kind === 'defect' ? 'get_issue_detail' : 'get_related_issues / get_testcases'
+    const projectIdentifier = task.project?.identifier?.toUpperCase() ?? null
+    const displayId = taskDisplayId({}, task, projectIdentifier)
     const parts = [
-      `# #${task.number} ${task.name}`,
+      `# ${displayId} ${task.name}`,
       '',
       `- **Type**: ${task.subIssueType?.name ?? task.issueType?.name ?? 'Unknown'}`,
       `- **Work Item Kind**: ${kind}`,
@@ -340,7 +344,7 @@ export class OnesTaskContent {
     if (task.parent?.uuid) {
       parts.push('', '## Parent Task', `- UUID: ${task.parent.uuid}`)
       if (task.parent.number)
-        parts.push(`- Number: #${task.parent.number}`)
+        parts.push(`- Number: ${projectIdentifier ? `${projectIdentifier}-${task.parent.number}` : `#${task.parent.number}`}`)
     }
     const detailText = getTaskDetailText(task)
     if (detailText)
@@ -355,7 +359,7 @@ export class OnesTaskContent {
     if (task.relatedTasks?.length) {
       parts.push('', '## Related Tasks')
       for (const related of task.relatedTasks)
-        parts.push(`- #${related.number} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${related.assign?.name ?? 'Unassigned'}`)
+        parts.push(`- ${taskDisplayId({}, related, related.project?.identifier?.toUpperCase() ?? projectIdentifier)} ${related.name} [${related.issueType?.name}] (${related.status?.name}) — ${related.assign?.name ?? 'Unassigned'}`)
     }
     const requirement = toRequirement(task, parts.join('\n'))
     requirement.raw = {

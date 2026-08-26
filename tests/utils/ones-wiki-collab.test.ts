@@ -22,9 +22,9 @@ class FakeWebSocket extends EventEmitter {
         type: 'http://sharejs.org/types/JSONv0',
       }))
     }
-    else if (message.a === 's') {
+    else if (message.a === 'f') {
       queueMicrotask(() => this.frame({
-        a: 's',
+        a: 'f',
         c: 'team-demo',
         d: 'document-demo',
         data: {
@@ -40,14 +40,27 @@ class FakeWebSocket extends EventEmitter {
         },
       }))
     }
+    else if (message.a === 'ps') {
+      queueMicrotask(() => this.frame({
+        a: 'ps',
+        ch: message.ch,
+        seq: message.seq,
+      }))
+    }
+    else if (message.a === 's') {
+      queueMicrotask(() => this.frame({
+        a: 's',
+        c: 'team-demo',
+        d: 'document-demo',
+      }))
+    }
     else if (message.a === 'op') {
       queueMicrotask(() => this.frame({
         a: 'op',
         c: 'team-demo',
         d: 'document-demo',
-        src: 'client-demo',
-        seq: 1,
-        v: 42,
+        seq: message.seq,
+        v: Number(message.v) + 1,
       }))
     }
   }
@@ -83,7 +96,25 @@ describe('ones Wiki collaboration protocol', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: () => Promise.resolve({ read: 'share-db-read-token', user: 'user-demo' }),
+      headers: new Headers({ 'set-cookie': 'wiz-session=editor-demo; Path=/; HttpOnly' }),
+      json: () => Promise.resolve({ read: 'share-db-read-token', user: 'editor-user-demo' }),
+    })
+    const openWebSocket = vi.fn((_url: string, headers?: Record<string, string>) => {
+      expect(headers).toMatchObject({
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Cookie': 'login-session=project-demo; wiz-session=editor-demo',
+        'Origin': 'https://ones.test',
+        'Pragma': 'no-cache',
+      })
+      queueMicrotask(() => socket.frame({
+        a: 'init',
+        id: 'client-demo',
+        protocol: 1,
+        protocolMinor: 1,
+        type: 'http://sharejs.org/types/JSONv0',
+      }))
+      return socket as unknown as WebSocket
     })
 
     const resultPromise = replaceOnesWikiDocument({
@@ -92,23 +123,15 @@ describe('ones Wiki collaboration protocol', () => {
       documentId: 'document-demo',
       accessToken: 'oauth-access-token',
       editorToken: 'live-editor-token',
-      userId: 'user-demo',
+      userId: 'session-user-demo',
+      cookieHeader: 'login-session=project-demo',
       displayName: 'Example User',
     }, snapshot => ({
       ...snapshot,
       blocks: [{ id: 'block-demo', type: 'text', text: [{ insert: 'After' }] }],
     }), {
       fetch: fetchMock,
-      openWebSocket: () => {
-        queueMicrotask(() => socket.frame({
-          a: 'init',
-          id: 'client-demo',
-          protocol: 1,
-          protocolMinor: 1,
-          type: 'http://sharejs.org/types/JSONv0',
-        }))
-        return socket as unknown as WebSocket
-      },
+      openWebSocket,
     })
 
     await expect(resultPromise).resolves.toEqual({
@@ -123,31 +146,47 @@ describe('ones Wiki collaboration protocol', () => {
         headers: expect.objectContaining({
           'Authorization': 'Bearer oauth-access-token',
           'x-live-editor-token': 'live-editor-token',
+          'Cookie': 'login-session=project-demo',
         }),
       }),
     )
     const authHeaders = fetchMock.mock.calls[0][1].headers as Record<string, string>
     expect(Buffer.from(authHeaders['x-live-editor-base-url'], 'base64url').toString()).toBe(
-      'wss://ones.test/wiki/api/wiki/editor/team-demo/document-demo',
+      'https://ones.test/wiki/api/wiki/editor/team-demo/document-demo',
     )
-    expect(socket.sent.map(message => message.a)).toEqual(['hs', 's', 'op'])
+    expect(socket.sent.map(message => message.a)).toEqual(['hs', 'f', 'p', 'ps', 's', 'op'])
     expect(socket.sent[0]).toEqual(expect.objectContaining({
       a: 'hs',
-      id: 'client-demo',
+      id: null,
       auth: expect.objectContaining({
         appId: 'team-demo',
         docId: 'document-demo',
         permission: 'w',
-        token: 'share-db-read-token',
+        userId: 'session-user-demo',
+        token: 'live-editor-token',
       }),
     }))
-    expect(socket.sent[1]).toEqual({ a: 's', c: 'team-demo', d: 'document-demo' })
+    expect(socket.sent[0]).not.toHaveProperty('protocol')
+    expect(socket.sent[0]).not.toHaveProperty('protocolMinor')
+    expect(socket.sent[0]).not.toHaveProperty('options')
+    expect(socket.sent[1]).toEqual({ a: 'f', c: 'team-demo', d: 'document-demo' })
     expect(socket.sent[2]).toEqual(expect.objectContaining({
+      a: 'p',
+      ch: 'team-demo:document-demo',
+      p: null,
+      pv: 2,
+    }))
+    expect(socket.sent[3]).toEqual({ a: 'ps', ch: 'team-demo:document-demo', seq: 1 })
+    expect(socket.sent[4]).toEqual({ a: 's', c: 'team-demo', d: 'document-demo', v: 41 })
+    expect(socket.sent[5]).toEqual(expect.objectContaining({
       a: 'op',
       c: 'team-demo',
       d: 'document-demo',
       v: 41,
       seq: 1,
+      x: {},
     }))
+    expect(socket.sent[5]).not.toHaveProperty('src')
+    expect(JSON.stringify(socket.sent[5].op)).toContain('"r":true')
   })
 })

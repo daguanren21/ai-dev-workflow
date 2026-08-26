@@ -56,6 +56,8 @@ export interface WikiPathResolution {
   pageId: string
   title: string
   breadcrumb: string[]
+  /** Internal redaction hook for authenticated self-alias resolution. */
+  redactPrivateValues?: (value: string) => string
 }
 
 export interface WikiPathResolveParams {
@@ -68,6 +70,7 @@ export type WikiUpdateOperation
   = | { type: 'append_blocks', markdown: string }
     | { type: 'append_table_row', tableHeaders: string[], row: Record<string, string> }
     | { type: 'replace_text', find: string, replace: string }
+    | { type: 'replace_document', markdown: string }
 
 export interface WikiWriteBaseline {
   pageId: string
@@ -91,6 +94,16 @@ export interface WikiUpdateRequest {
   baseline: WikiWriteBaseline
   operation: WikiUpdateOperation
   idempotencyKey: string
+}
+export interface WikiDeleteRequest {
+  teamId: string
+  spaceId: string
+  pageId: string
+}
+
+export interface WikiDeleteResult {
+  pageId: string
+  deleted: true
 }
 
 export interface WikiWriteResult {

@@ -16,7 +16,7 @@ export const GetOnesWikiPageSchema = z.object({
   path: z.union([
     z.string().trim().min(1),
     z.array(z.string().trim().min(1)).min(1),
-  ]).optional().describe('Wiki path such as "Department/Annual Plans/2026". Resolves a unique exact, title-prefix, or confidently close match; otherwise returns candidate pages for confirmation.'),
+  ]).optional().describe('Wiki path such as "Department/Annual Plans/2026". Exact self-reference segments such as "我的", "我", "me", or "my" resolve the authenticated user through ONES token info without exposing the display name. Resolves a unique exact, title-prefix, or confidently close match; otherwise returns candidate pages for confirmation.'),
   teamId: z.string().trim().min(1).optional(),
   spaceId: z.string().trim().min(1).optional(),
   revealSensitiveSecrets: z.boolean().default(false).describe('Default false. Set true only when the user explicitly asks to reveal secrets.'),
@@ -146,6 +146,19 @@ export async function handleGetOnesWikiPage(
     teamId: resolved?.teamId ?? input.teamId,
     spaceId: resolved?.spaceId ?? input.spaceId,
   }), input.revealSensitiveSecrets)
+  if (resolved) {
+    page.title = resolved.title
+    page.breadcrumb = resolved.breadcrumb
+    const redactPrivateValues = resolved.redactPrivateValues
+    if (redactPrivateValues) {
+      page.content = redactPrivateValues(page.content)
+      page.attachments = page.attachments.map(attachment => ({
+        ...attachment,
+        name: redactPrivateValues(attachment.name),
+        url: redactPrivateValues(attachment.url),
+      }))
+    }
+  }
   return {
     content: [{
       type: 'text' as const,

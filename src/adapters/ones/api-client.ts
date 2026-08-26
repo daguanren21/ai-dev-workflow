@@ -24,11 +24,27 @@ function base64Url(buffer: Buffer): string {
 }
 
 function getSetCookies(response: Response): string[] {
+  if (!response.headers)
+    return []
   const headers = response.headers as unknown as { getSetCookie?: () => string[] }
   if (headers.getSetCookie)
     return headers.getSetCookie()
   const raw = response.headers.get('set-cookie')
   return raw ? [raw] : []
+}
+
+function mergeResponseCookies(cookieJar: Map<string, string>, response: Response): void {
+  for (const cookie of getSetCookies(response)) {
+    const pair = cookie.split(';')[0]
+    const separator = pair.indexOf('=')
+    if (separator <= 0)
+      continue
+    cookieJar.set(pair.slice(0, separator), pair.slice(separator + 1))
+  }
+}
+
+function serializeCookies(cookieJar: Map<string, string>): string {
+  return [...cookieJar].map(([name, value]) => `${name}=${value}`).join('; ')
 }
 
 function parseRedirectValue(location: string, names: string[]): string | null {
@@ -65,6 +81,7 @@ export class OnesApiClient {
     if (!email || !password)
       throw new Error('ONES auth requires email and password (ones-pkce auth type)')
 
+    const cookieJar = new Map<string, string>()
     const certRes = await fetch(`${baseUrl}/identity/api/encryption_cert`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -86,7 +103,7 @@ export class OnesApiClient {
     if (!loginRes.ok)
       throw new Error(`ONES: Login failed with status ${loginRes.status}`)
 
-    const cookies = getSetCookies(loginRes).map(cookie => cookie.split(';')[0]).join('; ')
+    mergeResponseCookies(cookieJar, loginRes)
     const loginData = await loginRes.json() as OnesLoginResponse
     const configuredOrgUuid = this.config.options?.orgUuid as string | undefined
     const orgUser = configuredOrgUuid
@@ -94,6 +111,11 @@ export class OnesApiClient {
       : loginData.org_users[0]
     if (!orgUser)
       throw new Error('ONES: No organizations found for this user')
+    cookieJar.set('ones-region-uuid', orgUser.region_uuid)
+    cookieJar.set('ones-org-uuid', orgUser.org_uuid)
+    const timezone = cookieJar.get('ones-tz')
+    if (timezone)
+      cookieJar.set('timezone', timezone)
 
     const codeVerifier = base64Url(crypto.randomBytes(32))
     const codeChallenge = base64Url(crypto.createHash('sha256').update(codeVerifier).digest())
@@ -108,10 +130,11 @@ export class OnesApiClient {
     })
     const authorizeRes = await fetch(`${baseUrl}/identity/authorize`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': cookies },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': serializeCookies(cookieJar) },
       body: authorizeParams.toString(),
       redirect: 'manual',
     })
+    mergeResponseCookies(cookieJar, authorizeRes)
     const authorizeLocation = authorizeRes.headers.get('location')
     if (!authorizeLocation)
       throw new Error('ONES: Authorize response missing location header')
@@ -123,7 +146,7 @@ export class OnesApiClient {
         throw new Error('ONES: Cannot parse auth_request_id from authorize redirect')
       const finalizeRes = await fetch(`${baseUrl}/identity/api/auth_request/finalize`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json;charset=UTF-8', 'Cookie': cookies },
+        headers: { 'Content-Type': 'application/json;charset=UTF-8', 'Cookie': serializeCookies(cookieJar) },
         body: JSON.stringify({
           auth_request_id: authRequestId,
           region_uuid: orgUser.region_uuid,
@@ -131,12 +154,14 @@ export class OnesApiClient {
           org_user_uuid: orgUser.org_user.org_user_uuid,
         }),
       })
+      mergeResponseCookies(cookieJar, finalizeRes)
       if (!finalizeRes.ok)
         throw new Error(`ONES: Finalize failed with status ${finalizeRes.status}`)
       const callbackRes = await fetch(
         `${baseUrl}/identity/authorize/callback?id=${authRequestId}&lang=zh`,
-        { method: 'GET', headers: { Cookie: cookies }, redirect: 'manual' },
+        { method: 'GET', headers: { Cookie: serializeCookies(cookieJar) }, redirect: 'manual' },
       )
+      mergeResponseCookies(cookieJar, callbackRes)
       const callbackLocation = callbackRes.headers.get('location')
       if (!callbackLocation)
         throw new Error('ONES: Callback response missing location header')
@@ -147,7 +172,7 @@ export class OnesApiClient {
 
     const tokenRes = await fetch(`${baseUrl}/identity/oauth/token`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': cookies },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': serializeCookies(cookieJar) },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         client_id: 'ones.v1',
@@ -156,9 +181,11 @@ export class OnesApiClient {
         redirect_uri: `${baseUrl}/auth/authorize/callback`,
       }).toString(),
     })
+    mergeResponseCookies(cookieJar, tokenRes)
     if (!tokenRes.ok)
       throw new Error(`ONES: Token exchange failed with status ${tokenRes.status}`)
     const token = await tokenRes.json() as OnesTokenResponse
+    cookieJar.set('ones-lt', token.access_token)
 
     const teamsRes = await fetch(
       `${baseUrl}/project/api/project/organization/${orgUser.org_uuid}/stamps/data?t=org_my_team`,
@@ -167,10 +194,12 @@ export class OnesApiClient {
         headers: {
           'Authorization': `Bearer ${token.access_token}`,
           'Content-Type': 'application/json;charset=UTF-8',
+          'Cookie': serializeCookies(cookieJar),
         },
         body: JSON.stringify({ org_my_team: 0 }),
       },
     )
+    mergeResponseCookies(cookieJar, teamsRes)
     if (!teamsRes.ok)
       throw new Error(`ONES: Failed to fetch teams: ${teamsRes.status}`)
     const teamsData = await teamsRes.json() as {
@@ -190,6 +219,9 @@ export class OnesApiClient {
       orgUuid: orgUser.org_uuid,
       userUuid: orgUser.org_user.org_user_uuid,
       userName: orgUser.org_user.name,
+      cookieHeader: serializeCookies(cookieJar),
+      legacyAuthToken: loginData.sid,
+      legacyUserId: loginData.auth_user_uuid,
       expiresAt: Date.now() + (token.expires_in - 60) * 1000,
     }
     return this.session

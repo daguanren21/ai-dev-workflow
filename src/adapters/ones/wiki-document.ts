@@ -362,16 +362,52 @@ export function renderWikiContent(content: string, context: WikiRenderContext = 
 }
 
 function newWikiBlockId(): string {
-  return randomBytes(8).toString('base64url').slice(0, 10)
+  for (;;) {
+    const id = randomBytes(9).toString('base64url').replace(/[^a-z0-9]/gi, '').slice(0, 9)
+    if (/^[a-z][a-z0-9]{8}$/i.test(id))
+      return id
+  }
 }
 
-function wikiTextBlock(text: string, options: { heading?: number, list?: boolean, ordered?: boolean } = {}): OnesWikiBlock {
+function markdownTextRuns(text: string): Array<{ insert: string, attributes?: { 'link'?: string, 'style-code'?: boolean } }> {
+  if (!text)
+    return []
+
+  const runs: Array<{ insert: string, attributes?: { 'link'?: string, 'style-code'?: boolean } }> = []
+  const inlinePattern = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|`([^`]+)`/g
+  let cursor = 0
+  for (const match of text.matchAll(inlinePattern)) {
+    const index = match.index ?? 0
+    if (index > cursor)
+      runs.push({ insert: text.slice(cursor, index) })
+    if (match[1] && match[2])
+      runs.push({ insert: match[1], attributes: { link: match[2] } })
+    else if (match[3])
+      runs.push({ insert: match[3], attributes: { 'style-code': true } })
+    cursor = index + match[0].length
+  }
+  if (cursor < text.length)
+    runs.push({ insert: text.slice(cursor) })
+  return runs.length ? runs : [{ insert: text }]
+}
+
+function wikiTextBlock(
+  text: string,
+  options: { heading?: number, list?: boolean, ordered?: boolean, level?: number, start?: number, groupId?: string } = {},
+): OnesWikiBlock {
   return {
     id: newWikiBlockId(),
     type: options.list ? 'list' : 'text',
-    text: text ? [{ insert: text }] : [],
+    text: markdownTextRuns(text),
     ...(options.heading ? { heading: options.heading } : {}),
-    ...(options.list ? { ordered: options.ordered ?? false, level: 1 } : {}),
+    ...(options.list
+      ? {
+          ordered: options.ordered ?? false,
+          level: options.level ?? 1,
+          ...(options.start === undefined ? {} : { start: options.start }),
+          ...(options.groupId ? { groupId: options.groupId } : {}),
+        }
+      : {}),
   }
 }
 
@@ -389,14 +425,24 @@ function isMarkdownSeparatorRow(line: string): boolean {
   return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(cell))
 }
 
+function estimateWikiTableCellWidth(value: string): number {
+  return [...value].reduce((width, character) => width + (character.codePointAt(0)! > 0x7F ? 14 : 7), 24)
+}
+
 export function markdownToWikiDocument(markdown: string): Record<string, unknown> {
   const document: Record<string, unknown> = { blocks: [], comments: {}, meta: {} }
   const blocks = document.blocks as OnesWikiBlock[]
   const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  let activeList: { ordered: boolean, groupId: string, nextStart: number } | null = null
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
+    if (!line.trim()) {
+      activeList = null
+      continue
+    }
     if (line.includes('|') && lines[index + 1] && isMarkdownSeparatorRow(lines[index + 1])) {
+      activeList = null
       const rows = [parseMarkdownRow(line)]
       index += 2
       while (index < lines.length && lines[index].includes('|')) {
@@ -413,29 +459,136 @@ export function markdownToWikiDocument(markdown: string): Record<string, unknown
           document[cellId] = [wikiTextBlock(row[column] ?? '')]
         }
       }
-      blocks.push({ id: newWikiBlockId(), type: 'table', rows: rows.length, cols: columnCount, children })
+      blocks.push({
+        id: newWikiBlockId(),
+        type: 'table',
+        cols: columnCount,
+        rows: rows.length,
+        colsWidth: Array.from({ length: columnCount }, (_, column) => Math.max(
+          100,
+          ...rows.map(row => estimateWikiTableCellWidth(row[column] ?? '')),
+        )),
+        children,
+      })
       continue
     }
 
     const heading = line.match(/^(#{1,6})[ \t]/)
     if (heading?.[1]) {
+      activeList = null
       blocks.push(wikiTextBlock(line.slice(heading[0].length).trim(), { heading: heading[1].length }))
       continue
     }
     const unordered = line.match(/^[ \t]*[-*+][ \t]/)
     if (unordered) {
-      blocks.push(wikiTextBlock(line.slice(unordered[0].length).trim(), { list: true }))
+      const groupId: string = activeList && !activeList.ordered ? activeList.groupId : newWikiBlockId()
+      const start: number = activeList && !activeList.ordered ? activeList.nextStart : 1
+      activeList = { ordered: false, groupId, nextStart: start + 1 }
+      blocks.push(wikiTextBlock(line.slice(unordered[0].length).trim(), { list: true, groupId, start }))
       continue
     }
-    const ordered = line.match(/^[ \t]*\d+[.)][ \t]/)
-    if (ordered) {
-      blocks.push(wikiTextBlock(line.slice(ordered[0].length).trim(), { list: true, ordered: true }))
+    const ordered = line.match(/^[ \t]*(\d+)[.)][ \t]/)
+    if (ordered?.[1]) {
+      const groupId: string = activeList?.ordered ? activeList.groupId : newWikiBlockId()
+      const start = Number.parseInt(ordered[1], 10)
+      activeList = { ordered: true, groupId, nextStart: start + 1 }
+      blocks.push(wikiTextBlock(line.slice(ordered[0].length).trim(), {
+        list: true,
+        ordered: true,
+        start,
+        groupId,
+      }))
       continue
     }
+    activeList = null
     blocks.push(wikiTextBlock(line))
   }
 
   return document
+}
+
+export function markdownToWikiHtml(markdown: string): string {
+  const renderInline = (text: string) => markdownTextRuns(text)
+    .map((run) => {
+      const escaped = escapeWikiHtml(run.insert)
+      const content = run.attributes?.['style-code'] ? `<code>${escaped}</code>` : escaped
+      return run.attributes?.link
+        ? `<a href="${escapeWikiHtml(run.attributes.link)}" target="_blank" rel="noopener noreferrer">${content}</a>`
+        : content
+    })
+    .join('')
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n')
+  const html: string[] = []
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (!line.trim())
+      continue
+
+    if (line.includes('|') && lines[index + 1] && isMarkdownSeparatorRow(lines[index + 1])) {
+      const rows = [parseMarkdownRow(line)]
+      index += 2
+      while (index < lines.length && lines[index].includes('|')) {
+        rows.push(parseMarkdownRow(lines[index]))
+        index += 1
+      }
+      index -= 1
+      const columnCount = Math.max(...rows.map(row => row.length))
+      const width = Math.floor(100 / columnCount)
+      const header = Array.from<string>({ length: columnCount })
+        .map((_, column) => `<th style="width:${width}%">${renderInline(rows[0][column] ?? '')}</th>`)
+        .join('')
+      const body = rows.slice(1)
+        .map(row => `<tr>${Array.from<string>({ length: columnCount }).map((_, column) => `<td>${renderInline(row[column] ?? '')}</td>`).join('')}</tr>`)
+        .join('')
+      html.push(`<table style="width:100%"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`)
+      continue
+    }
+
+    const heading = line.match(/^(#{1,6})[ \t]/)
+    if (heading?.[1]) {
+      const level = heading[1].length
+      html.push(`<h${level}>${renderInline(line.slice(heading[0].length).trim())}</h${level}>`)
+      continue
+    }
+
+    const ordered = line.match(/^[ \t]*(\d+)[.)][ \t]/)
+    if (ordered?.[1]) {
+      const items: Array<{ value: number, text: string }> = []
+      while (index < lines.length) {
+        const item = lines[index].match(/^[ \t]*(\d+)[.)][ \t]/)
+        if (!item?.[1])
+          break
+        items.push({
+          value: Number.parseInt(item[1], 10),
+          text: lines[index].slice(item[0].length).trim(),
+        })
+        index += 1
+      }
+      index -= 1
+      html.push(`<ol start="${items[0].value}">${items.map(item => `<li>${renderInline(item.text)}</li>`).join('')}</ol>`)
+      continue
+    }
+
+    const unordered = line.match(/^[ \t]*[-*+][ \t]/)
+    if (unordered) {
+      const items: string[] = []
+      while (index < lines.length) {
+        const item = lines[index].match(/^[ \t]*[-*+][ \t]/)
+        if (!item)
+          break
+        items.push(lines[index].slice(item[0].length).trim())
+        index += 1
+      }
+      index -= 1
+      html.push(`<ul>${items.map(item => `<li>${renderInline(item)}</li>`).join('')}</ul>`)
+      continue
+    }
+
+    html.push(`<p>${renderInline(line.trim())}</p>`)
+  }
+
+  return html.join('\n')
 }
 
 export function parseWikiDocument(content: string): Record<string, unknown> {
@@ -512,6 +665,16 @@ function appendWikiTableRow(document: Record<string, unknown>, operation: Extrac
 }
 
 export function applyWikiUpdateOperation(content: string, operation: WikiUpdateOperation): string {
+  if (operation.type === 'replace_document') {
+    const current = parseWikiDocument(content)
+    const replacement = markdownToWikiDocument(operation.markdown)
+    for (const key of ['comments', 'meta', 'authors', 'commentators']) {
+      if (Object.hasOwn(current, key))
+        replacement[key] = current[key]
+    }
+    return JSON.stringify(replacement)
+  }
+
   const document = parseWikiDocument(content)
   if (operation.type === 'append_blocks')
     appendWikiDocument(document, markdownToWikiDocument(operation.markdown))

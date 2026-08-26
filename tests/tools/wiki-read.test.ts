@@ -104,6 +104,33 @@ describe('wiki read tools', () => {
     expect(result.structuredContent.title).toBe('Anonymous Runbook')
   })
 
+  it('keeps a current-user path alias private in Wiki page output', async () => {
+    const privateDisplayName = 'SENSITIVE_DISPLAY_NAME'
+    const mockAdapter = adapter()
+    vi.mocked(mockAdapter.resolveWikiPath).mockResolvedValueOnce({
+      teamId: 'team-demo',
+      spaceId: 'space-demo',
+      pageId: 'page-demo-root',
+      title: '我的',
+      breadcrumb: ['Example Department', 'Team Blog', '我的'],
+      redactPrivateValues: value => value.split(privateDisplayName).join('我的'),
+    })
+    vi.mocked(mockAdapter.getWikiPage).mockResolvedValueOnce(page({
+      title: privateDisplayName,
+      breadcrumb: ['Example Department', 'Team Blog', privateDisplayName],
+      content: `# ${privateDisplayName}`,
+    }))
+
+    const result = await handleGetOnesWikiPage({
+      path: 'Example Department/Team Blog/我的',
+      revealSensitiveSecrets: false,
+    }, new Map([['ones', mockAdapter]]), 'ones')
+
+    expect(result.structuredContent.title).toBe('我的')
+    expect(result.structuredContent.breadcrumb).toEqual(['Example Department', 'Team Blog', '我的'])
+    expect(JSON.stringify(result)).not.toContain(privateDisplayName)
+  })
+
   it('returns candidate options when a Wiki path has no exact match', async () => {
     const mockAdapter = adapter()
     vi.mocked(mockAdapter.resolveWikiPath).mockRejectedValueOnce(new WikiPathResolutionError(

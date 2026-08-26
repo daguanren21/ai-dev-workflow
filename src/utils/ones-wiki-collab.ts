@@ -1,6 +1,7 @@
 import type { Doc, JSONOp } from 'ot-json1'
 import type { RawData } from 'ws'
 
+import { randomBytes } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { insertOp, type as json1, removeOp, replaceOp } from 'ot-json1'
 import WebSocket from 'ws'
@@ -18,9 +19,11 @@ interface ShareDbMessage {
   a?: string
   id?: string
   c?: string
+  ch?: string
   d?: string
   v?: number
   seq?: number
+  src?: string
   error?: unknown
   protocol?: number
   protocolMinor?: number
@@ -39,6 +42,7 @@ export interface OnesWikiCollabOptions {
   accessToken: string
   editorToken: string
   userId: string
+  cookieHeader?: string
   displayName?: string
   avatarUrl?: string
   timeoutMs?: number
@@ -52,7 +56,15 @@ export interface OnesWikiCollabWriteResult {
 
 export interface OnesWikiCollabDependencies {
   fetch: typeof fetch
-  openWebSocket: (url: string) => WebSocket
+  openWebSocket: (url: string, headers?: Record<string, string>) => WebSocket
+}
+
+function getSetCookies(response: Response): string[] {
+  const headers = response.headers as Headers & { getSetCookie?: () => string[] }
+  if (headers.getSetCookie)
+    return headers.getSetCookie()
+  const raw = headers.get('set-cookie')
+  return raw ? [raw] : []
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -74,43 +86,64 @@ export function createTopLevelJson1Operation(
   next: Record<string, unknown>,
 ): JSONOp {
   let operation: JSONOp = null
+  const appendComponent = (component: JSONOp) => {
+    operation = operation === null ? component : json1.compose(operation, component)
+  }
   const keys = [...new Set([...Object.keys(current), ...Object.keys(next)])].sort()
 
   for (const key of keys) {
+    if (key === 'blocks')
+      continue
     const hasCurrent = Object.hasOwn(current, key)
     const hasNext = Object.hasOwn(next, key)
-    let component: JSONOp
-    if (!hasCurrent) {
-      component = insertOp([key], asDoc(next[key]))
-    }
-    else if (!hasNext) {
-      component = removeOp([key])
-    }
-    else if (!isDeepStrictEqual(current[key], next[key])) {
-      component = replaceOp([key], asDoc(current[key]), asDoc(next[key]))
-    }
-    else {
-      continue
-    }
-    operation = operation === null ? component : json1.compose(operation, component)
+    if (!hasCurrent && hasNext)
+      appendComponent(insertOp([key], asDoc(next[key])))
+    else if (hasCurrent && !hasNext)
+      appendComponent(removeOp([key]))
+    else if (hasCurrent && hasNext && !isDeepStrictEqual(current[key], next[key]))
+      appendComponent(replaceOp([key], asDoc(current[key]), asDoc(next[key])))
   }
+
+  const currentBlocks = Array.isArray(current.blocks) ? current.blocks : []
+  const nextBlocks = Array.isArray(next.blocks) ? next.blocks : []
+  const sharedBlockCount = Math.min(currentBlocks.length, nextBlocks.length)
+  for (let index = 0; index < sharedBlockCount; index += 1) {
+    if (!isDeepStrictEqual(currentBlocks[index], nextBlocks[index])) {
+      appendComponent(removeOp(['blocks', index]))
+      appendComponent(insertOp(['blocks', index], asDoc(nextBlocks[index])))
+    }
+  }
+  for (let index = currentBlocks.length - 1; index >= nextBlocks.length; index -= 1)
+    appendComponent(removeOp(['blocks', index]))
+  for (let index = currentBlocks.length; index < nextBlocks.length; index += 1)
+    appendComponent(insertOp(['blocks', index], asDoc(nextBlocks[index])))
 
   if (operation !== null)
     json1.checkValidOp(operation)
   return operation
 }
 
-function wikiEditorUrls(baseUrl: string, teamId: string, documentId: string): { authUrl: string, socketUrl: string } {
+function createTopLevelJson1Operations(
+  current: Record<string, unknown>,
+  next: Record<string, unknown>,
+): JSONOp[] {
+  const operation = createTopLevelJson1Operation(current, next)
+  return operation === null ? [] : [operation]
+}
+
+function wikiEditorUrls(baseUrl: string, teamId: string, documentId: string): { authUrl: string, editorBaseUrl: string, socketUrl: string } {
   const url = new URL(baseUrl)
   if (url.protocol !== 'https:' && url.protocol !== 'http:')
     throw new Error('ONES Wiki collaboration requires an HTTP(S) source URL')
   const encodedTeamId = encodeURIComponent(teamId)
   const encodedDocumentId = encodeURIComponent(documentId)
   const path = `/wiki/api/wiki/editor/${encodedTeamId}/${encodedDocumentId}`
-  const socketUrl = new URL(path, url)
+  const editorBaseUrl = new URL(path, url)
+  const socketUrl = new URL(editorBaseUrl)
   socketUrl.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return {
-    authUrl: new URL(`${path}/auth`, url).toString(),
+    authUrl: `${editorBaseUrl.toString()}/auth`,
+    editorBaseUrl: editorBaseUrl.toString(),
     socketUrl: socketUrl.toString(),
   }
 }
@@ -139,16 +172,17 @@ export async function replaceOnesWikiDocument(
   update: (snapshot: Record<string, unknown>) => Record<string, unknown>,
   dependencies: OnesWikiCollabDependencies = {
     fetch,
-    openWebSocket: url => new WebSocket(url),
+    openWebSocket: (url, headers) => new WebSocket(url, { headers }),
   },
 ): Promise<OnesWikiCollabWriteResult> {
-  const { authUrl, socketUrl } = wikiEditorUrls(options.baseUrl, options.teamId, options.documentId)
+  const { authUrl, editorBaseUrl, socketUrl } = wikiEditorUrls(options.baseUrl, options.teamId, options.documentId)
   const authResponse = await dependencies.fetch(authUrl, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${options.accessToken}`,
       'x-live-editor-token': options.editorToken,
-      'x-live-editor-base-url': Buffer.from(socketUrl).toString('base64url'),
+      'x-live-editor-base-url': Buffer.from(editorBaseUrl).toString('base64url'),
+      ...(options.cookieHeader ? { Cookie: options.cookieHeader } : {}),
     },
   })
   if (!authResponse.ok)
@@ -156,22 +190,36 @@ export async function replaceOnesWikiDocument(
   const editorAuth = await authResponse.json() as WikiEditorAuthResponse
   if (typeof editorAuth.read !== 'string' || !editorAuth.read)
     throw new Error('ONES Wiki collaboration auth response did not include a read token')
+  const cookies = [
+    options.cookieHeader,
+    ...getSetCookies(authResponse).map(cookie => cookie.split(';')[0]),
+  ].filter((cookie): cookie is string => Boolean(cookie)).join('; ')
+  const socketHeaders: Record<string, string> = {
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
+    'User-Agent': 'Mozilla/5.0 AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36',
+    'Origin': new URL(options.baseUrl).origin,
+    ...(cookies ? { Cookie: cookies } : {}),
+  }
 
   return new Promise<OnesWikiCollabWriteResult>((resolve, reject) => {
-    const socket = dependencies.openWebSocket(socketUrl)
-    const sequence = 1
-    let clientId = ''
-    let state: 'init' | 'handshake' | 'snapshot' | 'ack' = 'init'
+    const socket = dependencies.openWebSocket(socketUrl, socketHeaders)
+    let sequence = 1
+    let state: 'init' | 'handshake' | 'fetch' | 'presence' | 'subscribe' | 'ack' = 'init'
     let settled = false
     let snapshotVersion = 0
-    let timeout: ReturnType<typeof setTimeout> | undefined
+    let currentVersion = 0
+    let pendingOperations: JSONOp[] = []
+    const presenceChannel = `${options.teamId}:${options.documentId}`
+    const presenceId = randomBytes(7).toString('base64url').slice(0, 9)
+    let timeout: NodeJS.Timeout | undefined
 
     const finish = (result: OnesWikiCollabWriteResult) => {
       if (settled)
         return
       settled = true
-      if (timeout)
-        clearTimeout(timeout)
+      clearTimeout(timeout)
       resolve(result)
       closeSocket(socket)
     }
@@ -179,8 +227,7 @@ export async function replaceOnesWikiDocument(
       if (settled)
         return
       settled = true
-      if (timeout)
-        clearTimeout(timeout)
+      clearTimeout(timeout)
       reject(error)
       closeSocket(socket)
     }
@@ -190,11 +237,41 @@ export async function replaceOnesWikiDocument(
           fail(new Error(`ONES Wiki collaboration send failed: ${error.message}`))
       })
     }
+    const sendHandshake = () => {
+      send({
+        a: 'hs',
+        id: null,
+        auth: {
+          appId: options.teamId,
+          docId: options.documentId,
+          userId: options.userId,
+          permission: 'w',
+          token: options.editorToken,
+          displayName: options.displayName ?? '',
+          avatarUrl: options.avatarUrl ?? '',
+        },
+      })
+    }
+    const sendNextOperation = () => {
+      const operation = pendingOperations[0]
+      if (operation === undefined)
+        return
+      send({
+        a: 'op',
+        c: options.teamId,
+        d: options.documentId,
+        v: currentVersion,
+        seq: sequence,
+        x: {},
+        op: operation,
+      })
+    }
 
     timeout = setTimeout(() => {
       fail(new Error(`ONES Wiki collaboration timed out while waiting for ${state}`))
     }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 
+    socket.on('open', sendHandshake)
     socket.on('error', () => fail(new Error('ONES Wiki collaboration WebSocket failed')))
     socket.on('close', (code) => {
       if (!settled)
@@ -226,75 +303,72 @@ export async function replaceOnesWikiDocument(
           fail(new Error('ONES Wiki collaboration returned an unsupported init frame'))
           return
         }
-        clientId = message.id
         state = 'handshake'
-        send({
-          a: 'hs',
-          id: clientId,
-          auth: {
-            appId: options.teamId,
-            docId: options.documentId,
-            userId: options.userId,
-            permission: 'w',
-            token: editorAuth.read,
-            displayName: options.displayName ?? '',
-            avatarUrl: options.avatarUrl ?? '',
-          },
-          options: { ping: { interval: 50_000, timeout: 150_000 } },
-        })
+        sendHandshake()
         return
       }
 
       if (state === 'handshake') {
-        if (message.a !== 'hs' || message.id !== clientId || message.protocol !== 1 || message.protocolMinor !== 1 || message.type !== JSON0_URI) {
+        if (message.a !== 'hs' || typeof message.id !== 'string' || message.protocol !== 1 || message.protocolMinor !== 1 || message.type !== JSON0_URI) {
           fail(new Error('ONES Wiki collaboration returned an unsupported handshake frame'))
           return
         }
-        state = 'snapshot'
-        send({ a: 's', c: options.teamId, d: options.documentId })
+        state = 'fetch'
+        send({ a: 'f', c: options.teamId, d: options.documentId })
         return
       }
 
-      if (state === 'snapshot') {
+      if (state === 'fetch') {
         const snapshot = message.data
-        if (message.a !== 's' || message.c !== options.teamId || message.d !== options.documentId || typeof snapshot?.v !== 'number' || snapshot.type !== JSON1_URI) {
-          fail(new Error('ONES Wiki collaboration returned an unsupported snapshot frame'))
+        if (message.a !== 'f' || message.c !== options.teamId || message.d !== options.documentId || typeof snapshot?.v !== 'number' || snapshot.type !== JSON1_URI) {
           return
         }
         const current = asWikiSnapshot(snapshot.data)
-        let next: Record<string, unknown>
-        let operation: JSONOp
         try {
-          next = asJsonDocument(update(structuredClone(current)), 'update')
-          operation = createTopLevelJson1Operation(current, next)
+          const next = asJsonDocument(update(structuredClone(current)), 'update')
+          pendingOperations = createTopLevelJson1Operations(current, next)
         }
         catch (error) {
           fail(error instanceof Error ? error : new Error('ONES Wiki collaboration update failed'))
           return
         }
         snapshotVersion = snapshot.v
-        if (operation === null) {
+        currentVersion = snapshotVersion
+        state = 'presence'
+        send({ a: 'p', ch: presenceChannel, id: presenceId, p: null, pv: 2 })
+        send({ a: 'ps', ch: presenceChannel, seq: 1 })
+        return
+      }
+
+      if (state === 'presence') {
+        if (message.a !== 'ps' || message.ch !== presenceChannel || message.seq !== 1)
+          return
+        state = 'subscribe'
+        send({ a: 's', c: options.teamId, d: options.documentId, v: snapshotVersion })
+        return
+      }
+
+      if (state === 'subscribe') {
+        if (message.a !== 's' || message.c !== options.teamId || message.d !== options.documentId)
+          return
+        if (!pendingOperations.length) {
           finish({ snapshotVersion, version: snapshotVersion, changed: false })
           return
         }
         state = 'ack'
-        send({
-          a: 'op',
-          c: options.teamId,
-          d: options.documentId,
-          v: snapshotVersion,
-          seq: sequence,
-          op: operation,
-        })
+        sendNextOperation()
         return
       }
 
       if (state === 'ack' && message.a === 'op' && message.c === options.teamId && message.d === options.documentId && message.seq === sequence) {
-        finish({
-          snapshotVersion,
-          version: typeof message.v === 'number' ? message.v : snapshotVersion + 1,
-          changed: true,
-        })
+        currentVersion = typeof message.v === 'number' ? message.v : currentVersion + 1
+        pendingOperations.shift()
+        if (!pendingOperations.length) {
+          finish({ snapshotVersion, version: currentVersion, changed: true })
+          return
+        }
+        sequence += 1
+        sendNextOperation()
       }
     })
   })

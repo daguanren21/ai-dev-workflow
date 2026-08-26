@@ -28,6 +28,7 @@ function mockAdapter(page = mockPage()): BaseAdapter {
   return {
     sourceType: 'ones',
     getWikiPage: vi.fn().mockResolvedValue(page),
+    searchWikiPages: vi.fn().mockResolvedValue([]),
     resolveWikiPath: vi.fn().mockResolvedValue({
       teamId: page.teamId,
       spaceId: page.spaceId,
@@ -78,6 +79,61 @@ describe('wiki write safety workflow', () => {
     expect(adapter.updateWikiPage).not.toHaveBeenCalled()
   })
 
+  it('prepares a full-document replacement without changing the page ID', async () => {
+    const page = mockPage()
+    const result = await handlePrepareWikiUpdate({
+      pageId: page.pageId,
+      operation: {
+        type: 'replace_document',
+        markdown: '# Updated research',
+      },
+    }, new Map([['ones', mockAdapter(page)]]), new WikiWriteApprovalStore(), 'ones')
+
+    expect(result.structuredContent.request).toMatchObject({
+      pageId: page.pageId,
+      operation: {
+        type: 'replace_document',
+        markdown: '# Updated research',
+      },
+    })
+  })
+
+  it('requires a user decision when the target title already exists', async () => {
+    const parent = mockPage({
+      pageId: 'page-demo-parent',
+      title: 'Knowledge Base',
+      parentPageId: 'page-demo-root',
+      breadcrumb: ['Example Department', 'Knowledge Base'],
+    })
+    const existing = mockPage({
+      pageId: 'page-demo-existing',
+      title: 'Technical Sharing',
+      parentPageId: parent.pageId,
+      breadcrumb: [...parent.breadcrumb, 'Technical Sharing'],
+    })
+    const adapter = mockAdapter(parent)
+    vi.mocked(adapter.searchWikiPages).mockResolvedValueOnce([{
+      pageId: existing.pageId,
+      teamId: existing.teamId,
+      spaceId: existing.spaceId,
+      title: existing.title,
+      parentPageId: existing.parentPageId,
+      breadcrumb: existing.breadcrumb,
+      version: existing.version,
+      updatedAt: existing.updatedAt,
+    }])
+    vi.mocked(adapter.getWikiPage).mockImplementation(async ({ pageId }: { pageId: string }) => pageId === existing.pageId ? existing : parent)
+
+    await expect(
+      handlePrepareWikiCreate({
+        parentPageId: parent.pageId,
+        title: existing.title,
+        markdown: '# Technical Sharing',
+      }, new Map([['ones', adapter]]), new WikiWriteApprovalStore(), 'ones'),
+    ).rejects.toThrow('edit the existing page, delete it and recreate, or create with a new title')
+    expect(adapter.createWikiPage).not.toHaveBeenCalled()
+  })
+
   it('keeps apply disabled by default', async () => {
     const adapter = mockAdapter()
     const approvals = new WikiWriteApprovalStore()
@@ -97,6 +153,31 @@ describe('wiki write safety workflow', () => {
       expectedKind: 'create',
     })).rejects.toThrow('writes are disabled')
     expect(adapter.createWikiPage).not.toHaveBeenCalled()
+  })
+
+  it('keeps the current-user alias private while preparing a Wiki create', async () => {
+    const privateDisplayName = 'SENSITIVE_DISPLAY_NAME'
+    const page = mockPage({
+      title: privateDisplayName,
+      breadcrumb: ['Example Department', 'Team Blog', privateDisplayName],
+    })
+    const adapter = mockAdapter(page)
+    vi.mocked(adapter.resolveWikiPath).mockResolvedValueOnce({
+      teamId: page.teamId,
+      spaceId: page.spaceId!,
+      pageId: page.pageId,
+      title: '我的',
+      breadcrumb: ['Example Department', 'Team Blog', '我的'],
+    })
+
+    const prepared = await handlePrepareWikiCreate({
+      parentPath: 'Example Department/Team Blog/我的',
+      title: 'Technical Research',
+      markdown: 'Anonymous technical research content.',
+    }, new Map([['ones', adapter]]), new WikiWriteApprovalStore(), 'ones')
+
+    expect(prepared.structuredContent.targetBreadcrumb).toEqual(['Example Department', 'Team Blog', '我的', 'Technical Research'])
+    expect(JSON.stringify(prepared)).not.toContain(privateDisplayName)
   })
 
   it('uses a one-time token and rechecks the mock baseline before apply', async () => {
