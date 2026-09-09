@@ -1,5 +1,11 @@
 # ai-dev-requirements
 
+## 0.5.1
+
+### Patch Changes
+
+- [`7cb7076`](https://github.com/daguanren21/ai-dev-workflow/commit/7cb70763aedea96e8dc2e5b8874fc86854882055) Thanks [@daguanren21](https://github.com/daguanren21)! - Ignore non-attachment Wiki image sources during attachment resolution so inline data images cannot break work-item reads.
+
 ## 0.5.0
 
 ### Minor Changes
