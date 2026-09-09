@@ -83,6 +83,14 @@ interface OnesOpenApiWikiTree {
   pages?: OnesOpenApiWikiPage[]
 }
 
+function isWikiAttachmentPath(source: string): boolean {
+  if (/^[a-z][a-z\d+.-]*:/i.test(source))
+    return false
+
+  const sourceParts = source.split('/')
+  return sourceParts.every(part => Boolean(part) && part !== '.' && part !== '..' && !part.includes('\\'))
+}
+
 interface OnesOpenApiWikiSearchResult {
   pages?: Array<{
     fields?: OnesOpenApiWikiPage & {
@@ -345,9 +353,9 @@ export class OnesWikiReader {
 
   private buildImageUrl(session: OnesWikiReaderSession, refUuid: string, source: string, token: string, teamUuid?: string): string {
     const encodedRefUuid = encodeIdentifier(refUuid, 'wiki reference UUID')
-    const sourceParts = source.split('/')
-    if (sourceParts.some(part => !part || part === '.' || part === '..' || part.includes('\\')))
+    if (!isWikiAttachmentPath(source))
       throw new Error('ONES: Invalid wiki attachment path')
+    const sourceParts = source.split('/')
     const encodedSource = sourceParts.map(part => encodeURIComponent(part)).join('/')
     const encodedTeamUuid = encodeIdentifier(teamUuid ?? session.teamUuid, 'team UUID')
     return `${this.options.apiBase}/wiki/api/wiki/editor/${encodedTeamUuid}/${encodedRefUuid}/resources/${encodedSource}?token=${encodeURIComponent(token)}`
@@ -367,13 +375,14 @@ export class OnesWikiReader {
     const context: WikiRenderContext = { imageSources: [] }
     const content = renderWikiContent(typeof data.content === 'string' ? data.content : '', context)
     const token = typeof data.token === 'string' ? data.token : ''
-    if (!context.imageSources.length || !token)
+    const attachmentSources = context.imageSources.filter(isWikiAttachmentPath)
+    if (!attachmentSources.length || !token)
       return { content, attachments: [] }
     const detail = await this.fetchPageDetail(wikiUuid, wikiTeamUuid)
     const refUuid = typeof detail.ref_uuid === 'string' ? detail.ref_uuid : ''
     if (!refUuid)
       return { content, attachments: [] }
-    const attachments = context.imageSources.map((source, index) => ({
+    const attachments = attachmentSources.map((source, index) => ({
       id: `${wikiUuid}-image-${index + 1}`,
       name: attachmentNameFromPath(source),
       url: this.buildImageUrl(session, refUuid, source, token, wikiTeamUuid),

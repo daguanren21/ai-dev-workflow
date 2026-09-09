@@ -1554,6 +1554,38 @@ describe('onesAdapter', () => {
       expect(result.description).not.toContain('{"blocks"')
     })
 
+    it('should only resolve valid relative Wiki image sources as attachments', async () => {
+      mockLoginFlow()
+      mockTaskResponse(makeRequirementTask({
+        relatedWikiPages: [
+          { uuid: 'wiki-inline-image-uuid', title: 'Inline image page' },
+        ],
+        relatedWikiPagesCount: 1,
+      }))
+      const inlineImage = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+      mockWikiContent(JSON.stringify({
+        blocks: [
+          { id: 'inline-image', type: 'embed', embedType: 'image', embedData: { src: inlineImage } },
+          { id: 'external-image', type: 'embed', embedType: 'image', embedData: { src: 'https://cdn.example.test/external.png' } },
+          { id: 'unsafe-image', type: 'embed', embedType: 'image', embedData: { src: '../private.png' } },
+          { id: 'attachment-image', type: 'embed', embedType: 'image', embedData: { src: 'nested/diagram.png' } },
+        ],
+      }), { token: 'wiki-content-token' })
+      mockWikiPageDetail({ ref_uuid: 'wiki-ref-uuid' })
+
+      const result = await adapter.getRequirement({ id: 'abc-123-def' })
+
+      expect(result.description).toContain(`[Image: ${inlineImage}]`)
+      expect(result.description).toContain('[Image: https://cdn.example.test/external.png]')
+      expect(result.description).toContain('[Image: ../private.png]')
+      expect(result.attachments).toEqual([
+        expect.objectContaining({
+          name: 'diagram.png',
+          url: 'https://ones.test/wiki/api/wiki/editor/team-1/wiki-ref-uuid/resources/nested/diagram.png?token=wiki-content-token',
+        }),
+      ])
+    })
+
     it('should dedupe wiki pages from related wiki pages and task description links', async () => {
       mockLoginFlow()
       mockTaskResponse(makeRequirementTask({

@@ -62,6 +62,20 @@ describe('ones Wiki Markdown document generation', () => {
     )
   })
 
+  it('renders and reports all embedded image sources to the Wiki reader', () => {
+    const context = { imageSources: [] as string[] }
+    const source = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+    const rendered = renderWikiContent(JSON.stringify({
+      blocks: [
+        { id: 'inline-image', type: 'embed', embedType: 'image', embedData: { src: source } },
+        { id: 'attachment-image', type: 'embed', embedType: 'image', embedData: { src: 'diagram.png' } },
+      ],
+    }), context)
+
+    expect(rendered).toContain(`[Image: ${source}]`)
+    expect(context.imageSources).toEqual([source, 'diagram.png'])
+  })
+
   it('renders tables, ordered numbers, and links as publishable Wiki HTML', () => {
     const html = markdownToWikiHtml([
       '| Version | Status |',
